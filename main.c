@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <stdatomic.h>
 #include "http.h"
+#include <ctype.h>
 
 // void create_http_server() {
 
@@ -20,7 +21,7 @@
 // }
 
 volatile sig_atomic_t SHUTDOWN_REQ = 0;
-const char IP[] = "127.0.0.1";
+const char IP[] = "0.0.0.0";
 const uint16_t PORT = 3000;
 
 enum SERVER_CODES {
@@ -88,39 +89,52 @@ int SERVER_SOCKET_TERMINATE(int server_socket_fd) {
 
 /// *** ///
 
-void substring(const char *src, char *dest, int startIndex, int endIndex) {
-    int i = 0;
-    for(; startIndex < endIndex; ++startIndex) {
-        // printf("%c\n", src[startIndex]);
-        dest[i] = src[startIndex];
-        ++i;
+void strip_space(char *src, uint32_t line_len) {
+    uint32_t p1 = 0;
+    uint32_t p2 = 0;
+    
+    for(; p1 < line_len; ++p1) {
+	    if(!isspace(src[p1])) {
+		    src[p2] = src[p1];
+		    ++p2;
+	    }
     }
-    dest[i] = '\0';
+    
+    src[p2] = '\0';
 }
 
-
 void req_handler(char *buffer) {
-    // printf("CLIENT MESSAGE: %s\n", buffer);
-    // printf("Start Line: ")
-    // int i;
-    // int newStartIndex = 0;
-    // for(i = 0; i < BUFFER_SIZE; ++i) {
-    //     if(buffer[i] == '\0') {
-    //         return;
-    //     }
-    //     if(buffer[i] == '\n') {
-    //         char line[i + 1];
-    //         substring(buffer, line, newStartIndex, i);
-    //         printf("LINE: %s\n", line);
-    //         newStartIndex = i + 1;
-    //     }
-    // }
-    char *saveptr;
-    char *line = strtok_r(buffer, "\n", &saveptr);
+    char *saveptr_line;
+    char *line = strtok_r(buffer, "\n", &saveptr_line);
+    bool first_line = true;
+
     while(line != NULL) {
-        // printf("LINE: %s\n", line);
-        printf("%s\n", line);
-        line = strtok_r(NULL, "\n", &saveptr);
+	strip_space(line, strlen(line));
+	if(first_line) {
+		//char *saveptr_sub_token;
+		//char *method = strtok_r(line, " ", &saveptr_sub_token);
+	    	//char *path = strtok_r(NULL, " ", &saveptr_sub_token);
+		//char *version = strtok_r(NULL, " ", &saveptr_sub_token);
+	   	
+		//strip_space(line, strlen(line));
+
+		//printf("%s%s%s\n", method, path, version);
+		first_line = false;
+		continue;
+	} else {
+		char *saveptr_sub_token;
+
+		char *header_name = strtok_r(line, ":", &saveptr_sub_token);
+		char *header_value = strtok_r(NULL, "", &saveptr_sub_token);
+
+		if(header_name && header_value) {
+			printf("%s: %s\n", header_name, header_value);
+		}
+	}	
+	//    strip_space(line, strlen(line));
+        // printf("%s\n", line);
+	
+	line = strtok_r(NULL, "\n", &saveptr_line);
     }
 }
 
