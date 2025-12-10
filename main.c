@@ -160,9 +160,9 @@ int main()
 
         req_handler(buffer);
 
-        char message[] = "Request Recieved!\n";
+        char dummy_response[] = "HTTP/1.1 200 OK\r\nServer: C-Server\r\nDate: Wed, 03 Dec 2025 12:32:00 GMT\r\nContent-Length: 4\r\nContent-Type: text/html\r\nCache-Control: no-store\r\n\r\nRESP";
 
-        send(client_socket, message, strlen(message), 0);
+        send(client_socket, dummy_response, strlen(dummy_response), 0);
 
         close(client_socket);
     }

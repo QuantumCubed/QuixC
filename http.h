@@ -6,7 +6,7 @@
 #define MAX_HEADER_NAME_LEN 256
 #define MAX_HEADER_VALUE_LEN 8192
 
-// enum METHOD {
+// enum HTTP_METHOD {
 //     GET,
 //     POST,
 //     PUT,
@@ -20,3 +20,7 @@ typedef struct HTTP_REQUEST {
     char *body;
     uint16_t body_length;
 } HTTP_REQUEST;
+
+typedef struct HTTP_RESPONSE {
+    
+} HTTP_RESPONSE;
