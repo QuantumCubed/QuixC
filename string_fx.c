@@ -5,10 +5,12 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define str(BUFFER_SIZE) (Str) { .chars = (char[BUFFER_SIZE]){0}, .length = 0, .capacity = BUFFER_SIZE, ._heap_allocated = false }
+#define MAX_STACK_STR_BUFFER 4096 // 4KB
+#define str(BUFFER_SIZE) (Str) { ._origin_ptr = NULL, .chars = (char[BUFFER_SIZE]){0}, .length = 0, .capacity = BUFFER_SIZE, ._heap_allocated = false }
 
 typedef struct CharArray {
-	char *chars;
+	char *_origin_ptr; // original_ptr - DO NOT MODIFY!!! - FOR HEAP ONLY!!!
+	char *chars; // working ptr
 	size_t length; // DOES NOT INCLUDE NULL TERMINATOR: '\0'
 	size_t capacity; // size (in bytes) the buffer can hold
 	bool _heap_allocated;
@@ -82,11 +84,12 @@ static inline String *string(size_t BUFFER_SIZE) {
 	if(!s) {
 		fprintf(stderr, "String Alloc ERR!\n");
 	}
-	s -> chars = (char *) malloc(sizeof(char) * BUFFER_SIZE);
+	s -> _origin_ptr = (char *) malloc(sizeof(char) * BUFFER_SIZE);
 	if(!s -> chars) {
 		free(s);
 		fprintf(stderr, "Chars Alloc ERR!\n");
 	}
+	s -> chars = s -> _origin_ptr;
 	s -> length = 0;
 	s -> capacity = BUFFER_SIZE;
 	s -> _heap_allocated = true;
@@ -95,29 +98,37 @@ static inline String *string(size_t BUFFER_SIZE) {
 
 void string_cleanup(String *self) {
 	if (self -> _heap_allocated) {
-		free(self -> chars);
+		free(self -> _origin_ptr);
 		free(self);
 	}
 }
 
 int main(void) {
-	// Str newStr = str(10);
-	// str_write(&newStr, "abc");
-	// concat(&newStr, "def");
-	// concat(&newStr, "ghi");
 
-	// puts(newStr.chars);
-	// printf("%zu\n", newStr.length);
+	
 
-	// String *newStr2 = string(10);
-	// str_write(newStr2, "abc");
-	// concat(newStr2, "def");
-	// concat(newStr2, "ghi");
-
-	// puts(newStr2 -> chars);
-	// printf("%zu\n", newStr2 -> length);
-
-	// string_cleanup(newStr2);
 
 	return 0;
 }
+
+// int main(void) {
+// 	// Str newStr = str(10);
+// 	// str_write(&newStr, "abc");
+// 	// concat(&newStr, "def");
+// 	// concat(&newStr, "ghi");
+
+// 	// puts(newStr.chars);
+// 	// printf("%zu\n", newStr.length);
+
+// 	// String *newStr2 = string(10);
+// 	// str_write(newStr2, "abc");
+// 	// concat(newStr2, "def");
+// 	// concat(newStr2, "ghi");
+
+// 	// puts(newStr2 -> chars);
+// 	// printf("%zu\n", newStr2 -> length);
+
+// 	// string_cleanup(newStr2);
+
+// 	return 0;
+// }
