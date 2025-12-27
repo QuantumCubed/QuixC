@@ -19,6 +19,10 @@ ArrayList* arraylist_create(size_t init_capacity, size_t dt_size) {
         return NULL;
     }
 
+    if(init_capacity < 10) {
+        init_capacity = 10;
+    }
+
     list -> _origin_ptr = malloc(init_capacity * dt_size);
 
     if(!(list -> _origin_ptr)) {
@@ -49,7 +53,7 @@ void* arraylist_get(const ArrayList *self, size_t index) {
 
 void arraylist_append(ArrayList *self, const void *E) {
 
-    if(!self || !E) return NULL;
+    if(!self || !E) return;
 
     if((self -> size) >= (self -> capacity)) {
         // DO RESIZING
@@ -62,37 +66,37 @@ void arraylist_append(ArrayList *self, const void *E) {
 
 void arraylist_insert(ArrayList *self, size_t index, const void *E) {
 
-    if(!self || index > (self -> capacity) || !E) return NULL;
+    if(!self || index > (self -> capacity) || !E) return;
+
+    if(index == 0 && (self -> size) == 0) { arraylist_append(self, E); }
 
     if((self -> size) >= (self -> capacity)) {
         // DO RESIZING
     }
 
-    // replace element @target index with entry Element, inline swapping
-
-    void *Element;
-
-    memcpy(Element, E, self -> element_size);
-
-    for(size_t i = index; i < (self -> size) - 1; ++i) {
-        
-        // [A, B]
-        // COPY A
-        // SET A --> B : [B, B]
-        // SET ORIGINAL B --> TMP A : [B, A]
-        
-        void *tmp; // A
-
-        memcpy(tmp, ELEMENT_AT(self, i), self -> element_size); // COPY A --> tmp
-        memcpy(ELEMENT_AT(self, i), Element, self -> element_size); // SET A --> NEW ELEMENT
-        memcpy()
-        memcpy(ELEMENT_AT(self, i + 1), tmp, self -> element_size); // SET ORIGINAL B --> tmp
-
-        // insert(1, X);
-        // A, B, C --> A, X, B, C
+    for (size_t i = self -> size; i > index; i--) {
+        memcpy(ELEMENT_AT(self, i), ELEMENT_AT(self, i - 1), self -> element_size);
     }
 
-    memcpy(ELEMENT_AT(self, self -> size), E, self -> element_size);
-    
+    memcpy(ELEMENT_AT(self, index), E, self -> element_size);
+
     self -> size++;
+}
+
+void arraylist_remove(ArrayList *self, size_t index) {
+    if(!self || index > self -> size) {
+        return;
+    }
+
+    if(index == 0) {
+        self -> data = (self -> data) + (self -> element_size); // shift by 1 of type (x bytes)
+        self -> size--;
+    }
+    // specific index
+}
+
+void arraylist_pop(ArrayList *self) {
+    if(self -> size <= 0) {
+        self -> size--;
+    }
 }
