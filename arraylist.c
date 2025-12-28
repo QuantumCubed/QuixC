@@ -17,7 +17,7 @@ static void arraylist_resize(ArrayList *self) {
     self -> capacity = new_capacity;
 }
 
-ArrayList* arraylist_create(size_t init_capacity, size_t dt_size) {
+ArrayList* arraylist_create(size_t init_capacity, size_t dt_size, const void *destructor_callback) {
     ArrayList *list = (ArrayList *) malloc(sizeof(ArrayList));
 
     if(!list) {
@@ -40,6 +40,7 @@ ArrayList* arraylist_create(size_t init_capacity, size_t dt_size) {
     list -> size = 0;
     list -> capacity = init_capacity;
     list -> element_size = dt_size;
+    list -> element_destructor = destructor_callback;
 
     return list;
 }
@@ -47,7 +48,15 @@ ArrayList* arraylist_create(size_t init_capacity, size_t dt_size) {
 void arraylist_destroy(ArrayList *self) {
     if(!self) {
         fprintf(stderr, "NULL POINTER PASSED!\n");
+        return;
     }
+
+    if(self -> element_destructor) {
+        for(size_t i = 0; i < self -> size; ++i) {
+            self -> element_destructor(ELEMENT_AT(self, i));
+        }
+    }
+
     free(self -> data);
     free(self);
 }

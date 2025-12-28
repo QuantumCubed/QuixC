@@ -1,4 +1,3 @@
-#include "arraylist.h"
 #include "mstring.h"
 #include <stdio.h>
 #include <string.h>
@@ -7,27 +6,46 @@
 #include <stddef.h>
 
 inline String *m_string(size_t BUFFER_SIZE) {
+
+	if(BUFFER_SIZE == 0) { BUFFER_SIZE = 1; }
+
 	String *s = (String *) malloc(sizeof(String));
 	if(!s) {
 		fprintf(stderr, "String Alloc ERR!\n");
 	}
-	s -> _origin_ptr = (char *) malloc(sizeof(char) * BUFFER_SIZE);
-	if(!s -> chars) {
-		free(s);
+	s -> _origin_ptr = (char *) malloc(BUFFER_SIZE + 1);
+	if(!s -> _origin_ptr) {
 		fprintf(stderr, "Chars Alloc ERR!\n");
+		free(s);
+		return NULL;
 	}
 	s -> chars = s -> _origin_ptr;
 	s -> length = 0;
-	s -> capacity = BUFFER_SIZE;
+	s -> capacity = BUFFER_SIZE + 1;
 	s -> _heap_allocated = true;
+	s -> chars[0] = '\0'; // set chars 0 --> NULL Term
 	return s;
 }
 
-void m_string_cleanup(String *self) {
+void m_string_destroy(String *self) {
+
+	if(!self) {
+        fprintf(stderr, "NULL POINTER PASSED!\n");
+        return;
+    }
+
 	if (self -> _heap_allocated) {
 		free(self -> _origin_ptr);
 		free(self);
 	}
+}
+
+static void m_string_destroy_E(void *E) {
+	if(!E) {
+		fprintf(stderr, "NULL POINTER PASSED!\n");
+		return;
+	}
+	m_string_destroy(*(String **) E);
 }
 
 void m_string_write(mString *self, const char *str) {
@@ -59,50 +77,81 @@ void m_string_concat(mString *self, const char *str) {
 	}
 }
 
-void m_string_trim_leading_whitespace(mString *str) {
+void m_string_trim_leading_whitespace(mString *self) {
 	size_t index = 0;
-	while(index < (str -> length) && isspace((str -> chars)[index])) {
+	while(index < (self -> length) && isspace((self -> chars)[index])) {
 		++index;
 	}
-	str -> chars = (str -> chars) + index;
-	str -> length = (str -> length) - index;
+	self -> chars = (self -> chars) + index;
+	self -> length = (self -> length) - index;
 }
 
-void m_string_trim_trailing_whitespace(mString *str) {
-	size_t index = (str -> length) - 1;
-	while(index >= 0 && isspace((str -> chars)[index])) {
+void m_string_trim_trailing_whitespace(mString *self) {
+	size_t index = (self -> length) - 1;
+	while(index >= 0 && isspace((self -> chars)[index])) {
 		--index;
 	}
-	(str -> chars)[index + 1] = '\0';
-	str -> length = index + 1;
+	(self -> chars)[index + 1] = '\0';
+	self -> length = index + 1;
 }
 
-void m_string_trim_all_whitespace(mString *str) {
+void m_string_trim_all_whitespace(mString *self) {
 	size_t read, write = 0;
-	while(read < str -> length) {
-		if(!isspace((str -> chars)[read])) {
-			(str -> chars)[write] = (str -> chars)[read];
+	while(read < self -> length) {
+		if(!isspace((self -> chars)[read])) {
+			(self -> chars)[write] = (self -> chars)[read];
 			++write;
 		}
 		++read;
 	}
-	str -> chars[write] = '\0';
-    str -> length = write;
+	self -> chars[write] = '\0';
+    self -> length = write;
+}
+// RANGE IS: (INCLUSIVE, EXCLUSIVE)
+void m_string_substring(mString *dst, const mString *src, size_t start_index, size_t end_index) {
+
+	// TODO: BREAK CHECKS INTO MULTIPLE STATEMENTS
+
+	if(!dst || !src || start_index > end_index || end_index > src -> length || dst -> capacity < (end_index - start_index)) {
+		fprintf(stderr, "UNABLE TO CREATE SUBSTRING!\n");
+		return;
+	}
+
+	size_t j = 0;
+	for(size_t i = start_index; i < end_index; ++i) {
+		(dst -> chars)[j] = (src -> chars[i]);
+		++j;
+	}
+	(dst -> chars)[j] = '\0';
+	dst -> length = j;
 }
 
+ArrayList *m_string_tokenize(const mString *src, const char delimeter) {
+	if(!src) {
+		fprintf(stderr, "UNABLE TO TOKENIZE!\n");
+		return NULL;
+	}
 
-// ArrayList *split(KString *self, const char delimeter) {
-// 	ArrayList *str_array = arraylist_create(10, sizeof(KString));
-// 	char line[self -> length];
+	ArrayList *tokens = arraylist_create(10, sizeof(mString *), m_string_destroy_E);
 
-// 	size_t i = 0;
+	// "CSV,Style,Is,Like,This!"
 
-// 	for(size_t i = 0; i < self -> length; ++i) {
-// 		if((self -> chars[i]) == delimeter) {
-// 			arraylist_append(&str_array, );
-// 		}
-		
-// 	}
+	const char null_term = '\0';
 
-// 	return str_array;
-// }
+	size_t str_start_ptr = 0;
+
+	for(size_t i = 0; i < src -> length; ++i) {
+		if(((src -> chars)[i]) == delimeter) {
+			String *token = m_string(src -> length);
+			m_string_substring(token, src, str_start_ptr, i);
+			arraylist_append(tokens, &token);
+			str_start_ptr = i + 1;
+		}
+	}
+
+	String *final_token = m_string(src -> length);
+	m_string_substring(final_token, src, str_start_ptr, src -> length);
+	arraylist_append(tokens, &final_token);
+
+	return tokens;
+}

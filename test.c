@@ -67,13 +67,25 @@
 
 int main(void) {
 
-	Str newStr = m_str(50);
+    Str newStr = m_str(50);
+    // Str subStr = m_str(50);
 
-	m_string_write(&newStr, "This is a string, This has multiple characters");
+	// m_string_write(&newStr, "This is a string, This has multiple characters");
+    m_string_write(&newStr, "This string has spaces!");
 
-    newStr.chars[0] = 'A';
+    // m_string_substring(&subStr, &newStr, 18, newStr.length);
 
-    puts(newStr.chars);
+    ArrayList *tokens = m_string_tokenize(&newStr, ' ');
+
+    for(size_t i = 0; i < tokens -> size; ++i) {
+        String *ptr = *(String **) arraylist_get(tokens, i);
+        puts(ptr -> chars);
+    }
+
+    // puts(newStr.chars);
+    // puts(subStr.chars);
+
+    arraylist_destroy(tokens);
 
 	return 0;
 }
