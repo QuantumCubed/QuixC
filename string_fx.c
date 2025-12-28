@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include "arraylist.h"
 
 #define MAX_STACK_STR_BUFFER 4096 // 4KB
 #define str(BUFFER_SIZE) (Str) { ._origin_ptr = NULL, .chars = (char[BUFFER_SIZE]){0}, .length = 0, .capacity = BUFFER_SIZE, ._heap_allocated = false }
@@ -103,9 +104,29 @@ void string_cleanup(String *self) {
 	}
 }
 
+ArrayList *split(CharArray *self, const char delimeter) {
+	ArrayList *str_array = arraylist_create(10, sizeof(CharArray));
+	char line[self -> length];
+
+	size_t i = 0;
+
+	for(size_t i = 0; i < self -> length; ++i) {
+		if((self -> chars[i]) == delimeter) {
+			arraylist_append(&str_array, );
+		}
+		
+	}
+
+	return str_array;
+}
+
 int main(void) {
 
-	
+	Str newStr = str(10);
+
+	str_write(&newStr, "This is a string, This has multiple characters");
+
+
 
 
 	return 0;
