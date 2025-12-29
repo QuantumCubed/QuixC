@@ -73,19 +73,23 @@ int main(void) {
 	// m_string_write(&newStr, "This is a string, This has multiple characters");
     m_string_write(&newStr, "This string has spaces!");
 
+    
+
     // m_string_substring(&subStr, &newStr, 18, newStr.length);
 
-    ArrayList *tokens = m_string_tokenize(&newStr, ' ');
+    // ArrayList *tokens = m_string_tokenize(&newStr, " ");
 
-    for(size_t i = 0; i < tokens -> size; ++i) {
-        String *ptr = *(String **) arraylist_get(tokens, i);
-        puts(ptr -> chars);
-    }
+    // printf("ArrayList Size: %zu\n", tokens -> size);
+
+    // for(size_t i = 0; i < tokens -> size; ++i) {
+    //     String *ptr = *(String **) arraylist_get(tokens, i);
+    //     puts(ptr -> chars);
+    // }
 
     // puts(newStr.chars);
     // puts(subStr.chars);
 
-    arraylist_destroy(tokens);
+    // arraylist_destroy(tokens);
 
 	return 0;
 }

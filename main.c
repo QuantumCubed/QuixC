@@ -1,3 +1,5 @@
+#include "mstring.h"
+#include "arraylist.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -103,39 +105,56 @@ void strip_space(char *src, uint32_t line_len) {
     src[p2] = '\0';
 }
 
-void req_handler(char *buffer) {
-    char *saveptr_line;
-    char *line = strtok_r(buffer, "\n", &saveptr_line);
-    bool first_line = true;
+// void req_handler(char *buffer) {
+//     char *saveptr_line;
+//     char *line = strtok_r(buffer, "\n", &saveptr_line);
+//     bool first_line = true;
 
-    while(line != NULL) {
-	strip_space(line, strlen(line));
-	if(first_line) {
-		//char *saveptr_sub_token;
-		//char *method = strtok_r(line, " ", &saveptr_sub_token);
-	    	//char *path = strtok_r(NULL, " ", &saveptr_sub_token);
-		//char *version = strtok_r(NULL, " ", &saveptr_sub_token);
+//     while(line != NULL) {
+// 	strip_space(line, strlen(line));
+// 	if(first_line) {
+// 		//char *saveptr_sub_token;
+// 		//char *method = strtok_r(line, " ", &saveptr_sub_token);
+// 	    	//char *path = strtok_r(NULL, " ", &saveptr_sub_token);
+// 		//char *version = strtok_r(NULL, " ", &saveptr_sub_token);
 	   	
-		//strip_space(line, strlen(line));
+// 		//strip_space(line, strlen(line));
 
-		//printf("%s%s%s\n", method, path, version);
-		first_line = false;
-		continue;
-	} else {
-		char *saveptr_sub_token;
+// 		//printf("%s%s%s\n", method, path, version);
+// 		first_line = false;
+// 		continue;
+// 	} else {
+// 		char *saveptr_sub_token;
 
-		char *header_name = strtok_r(line, ":", &saveptr_sub_token);
-		char *header_value = strtok_r(NULL, "", &saveptr_sub_token);
+// 		char *header_name = strtok_r(line, ":", &saveptr_sub_token);
+// 		char *header_value = strtok_r(NULL, "", &saveptr_sub_token);
 
-		if(header_name && header_value) {
-			printf("%s: %s\n", header_name, header_value);
-		}
-	}	
-	//    strip_space(line, strlen(line));
-        // printf("%s\n", line);
+// 		if(header_name && header_value) {
+// 			printf("%s: %s\n", header_name, header_value);
+// 		}
+// 	}	
+// 	//    strip_space(line, strlen(line));
+//         // printf("%s\n", line);
 	
-	line = strtok_r(NULL, "\n", &saveptr_line);
+// 	line = strtok_r(NULL, "\n", &saveptr_line);
+//     }
+// }
+
+void req_handler(mString *str) {
+
+    printf("Request Length: %zu\n", str -> length);
+    puts(str -> chars);
+
+    ArrayList *tokens = m_string_tokenize(str, "\n");
+
+    printf("ArrayList Size: %zu\n", tokens -> size);
+
+    for(size_t i = 0; i < tokens -> size; ++i) {
+        mString *tok_ptr = *(mString **) arraylist_get(tokens, i);
+        puts(tok_ptr -> chars);
     }
+
+    arraylist_destroy(tokens);
 }
 
 int main()
@@ -154,11 +173,14 @@ int main()
     {
         int client_socket = accept(server_socket, NULL, NULL);
 
-        char buffer[BUFFER_SIZE];
+        // char buffer[BUFFER_SIZE];
 
-        recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
+        Str buffer = m_str(BUFFER_SIZE);
 
-        req_handler(buffer);
+        recv(client_socket, buffer.chars, BUFFER_SIZE - 1, 0);
+
+        buffer.length = strlen(buffer.chars);
+        req_handler(&buffer);
 
         char dummy_response[] = "HTTP/1.1 200 OK\r\nServer: C-Server\r\nDate: Wed, 03 Dec 2025 12:32:00 GMT\r\nContent-Length: 4\r\nContent-Type: text/html\r\nCache-Control: no-store\r\n\r\nRESP";
 

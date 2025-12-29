@@ -4,6 +4,7 @@
 #include "arraylist.h"
 #include <ctype.h>
 #include <stdbool.h>
+#include <sys/types.h>
 
 #define MAX_STACK_STR_BUFFER 4096 // 4KB
 // MIGHT BE COMPILER IMPLEMENTATION DEPENDENT
@@ -33,10 +34,12 @@ String *m_string(size_t BUFFER_SIZE);
 void m_string_destroy(String *self);
 void m_string_write(mString *self, const char *str);
 void m_string_concat(mString *self, const char *str);
+ssize_t m_string_index_of(mString *self, const char *find);
+void m_string_replace(mString *self, const char *find, const char *replace);
 void m_string_trim_leading_whitespace(mString *self);
 void m_string_trim_trailing_whitespace(mString *self);
 void m_string_trim_all_whitespace(mString *self);
 void m_string_substring(mString *dst, const mString *src, size_t start_index, size_t end_index);
-ArrayList *m_string_tokenize(const mString *src, const char delimeter);
+ArrayList *m_string_tokenize(const mString *src, const char *delimeter);
 
 #endif

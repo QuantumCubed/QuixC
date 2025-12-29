@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <sys/types.h>
 
 inline String *m_string(size_t BUFFER_SIZE) {
 
@@ -77,6 +78,24 @@ void m_string_concat(mString *self, const char *str) {
 	}
 }
 
+ssize_t m_string_index_of(mString *self, const char *find) {
+	
+	size_t target_length = strlen(find);
+	
+	for(size_t i = 0; i < self -> length; ++i) {
+
+	}
+	return 1;
+}
+
+void m_string_replace(mString *self, const char *find, const char *replace) {
+	// size_t target_length = strlen(find);
+	// "This is an example string!"
+	for(size_t i = 0; i < self -> length; ++i) {
+
+	}
+}
+
 void m_string_trim_leading_whitespace(mString *self) {
 	size_t index = 0;
 	while(index < (self -> length) && isspace((self -> chars)[index])) {
@@ -126,22 +145,18 @@ void m_string_substring(mString *dst, const mString *src, size_t start_index, si
 	dst -> length = j;
 }
 
-ArrayList *m_string_tokenize(const mString *src, const char delimeter) {
+ArrayList *m_string_tokenize(const mString *src, const char *delimeter) {
 	if(!src) {
 		fprintf(stderr, "UNABLE TO TOKENIZE!\n");
 		return NULL;
 	}
 
-	ArrayList *tokens = arraylist_create(10, sizeof(mString *), m_string_destroy_E);
-
-	// "CSV,Style,Is,Like,This!"
-
-	const char null_term = '\0';
+	ArrayList *tokens = arraylist_create(src -> length, sizeof(mString *), m_string_destroy_E);
 
 	size_t str_start_ptr = 0;
 
 	for(size_t i = 0; i < src -> length; ++i) {
-		if(((src -> chars)[i]) == delimeter) {
+		if(((src -> chars)[i]) == *delimeter) {
 			String *token = m_string(src -> length);
 			m_string_substring(token, src, str_start_ptr, i);
 			arraylist_append(tokens, &token);
