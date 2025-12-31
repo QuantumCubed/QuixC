@@ -1,3 +1,4 @@
+#include "http.h"
 #include "mstring.h"
 #include "arraylist.h"
 #include <stdio.h>
@@ -11,7 +12,6 @@
 #include <unistd.h>
 #include <signal.h>
 #include <stdatomic.h>
-#include "http.h"
 #include <ctype.h>
 
 // void create_http_server() {
@@ -143,17 +143,20 @@ void strip_space(char *src, uint32_t line_len) {
 void req_handler(mString *str) {
 
     printf("Request Length: %zu\n", str -> length);
-    puts(str -> chars);
+    // puts(str -> chars);
 
-    ArrayList *tokens = m_string_tokenize(str, "\n");
+    ArrayList *tokens = m_string_tokenize(str, "\r\n");
 
     printf("ArrayList Size: %zu\n", tokens -> size);
 
     for(size_t i = 0; i < tokens -> size; ++i) {
         mString *tok_ptr = *(mString **) arraylist_get(tokens, i);
-        puts(tok_ptr -> chars);
+        if(i + 1 == tokens -> size) {
+            printf("%s\n", tok_ptr -> chars);
+            break;
+        }
+        printf("%s\n***TOKEN***\n", tok_ptr -> chars);
     }
-
     arraylist_destroy(tokens);
 }
 

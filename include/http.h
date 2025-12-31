@@ -1,3 +1,6 @@
+#ifndef HTTP_H
+#define HTTP_H
+
 #include <stdlib.h>
 
 #define BUFFER_SIZE 4096
@@ -24,3 +27,5 @@ typedef struct HTTP_REQUEST {
 typedef struct HTTP_RESPONSE {
     
 } HTTP_RESPONSE;
+
+#endif

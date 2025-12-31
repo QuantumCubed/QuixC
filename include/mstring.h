@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
-#define MAX_STACK_STR_BUFFER 4096 // 4KB
+#define MAX_STACK_STR_BUFFER 1024 // 1KB
 // MIGHT BE COMPILER IMPLEMENTATION DEPENDENT
 #define m_str(BUFFER_SIZE) (Str) { ._origin_ptr = NULL, .chars = (char[BUFFER_SIZE]){0}, .length = 0, .capacity = BUFFER_SIZE, ._heap_allocated = false }
 // #define m_str(name, BUFFER_SIZE) \
@@ -34,8 +34,9 @@ String *m_string(size_t BUFFER_SIZE);
 void m_string_destroy(String *self);
 void m_string_write(mString *self, const char *str);
 void m_string_concat(mString *self, const char *str);
-ssize_t m_string_index_of(mString *self, const char *find);
+ssize_t m_string_index_of(const mString *self, const char *find);
 void m_string_replace(mString *self, const char *find, const char *replace);
+void m_string_replace_all(mString *self, const char *find, const char *replace);
 void m_string_trim_leading_whitespace(mString *self);
 void m_string_trim_trailing_whitespace(mString *self);
 void m_string_trim_all_whitespace(mString *self);
