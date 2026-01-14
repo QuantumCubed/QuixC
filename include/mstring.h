@@ -8,14 +8,14 @@
 
 #define MAX_STACK_STR_BUFFER 1024 // 1KB
 // MIGHT BE COMPILER IMPLEMENTATION DEPENDENT
-#define m_str(BUFFER_SIZE) (Str) { ._origin_ptr = NULL, .chars = (char[BUFFER_SIZE]){0}, .length = 0, .capacity = BUFFER_SIZE, ._heap_allocated = false }
-// #define m_str(name, BUFFER_SIZE) \
-// char name##_buffer[BUFFER_SIZE] = {0}; \
+#define m_str(MSTRING_BUFFER_SIZE) (Str) { ._origin_ptr = NULL, .chars = (char[MSTRING_BUFFER_SIZE + 1]){0}, .length = 0, .capacity = MSTRING_BUFFER_SIZE, ._heap_allocated = false }
+// #define m_str(name, MSTRING_BUFFER_SIZE) \
+// char name##_buffer[MSTRING_BUFFER_SIZE] = {0}; \
 // Str name = { \
 //     ._origin_ptr = NULL, \
 //     .chars = name##_buffer, \
 //     .length = 0, \
-//     .capacity = BUFFER_SIZE, \
+//     .capacity = MSTRING_BUFFER_SIZE, \
 //     ._heap_allocated = false \
 // }
 
@@ -30,7 +30,7 @@ typedef struct mString {
 typedef mString Str;     // Documents: stack-based string
 typedef mString String;  // Documents: heap-based string
 
-String *m_string(size_t BUFFER_SIZE);
+String *m_string(size_t MSTRING_BUFFER_SIZE);
 void m_string_destroy(String *self);
 void m_string_write(mString *self, const char *str);
 void m_string_concat(mString *self, const char *str);

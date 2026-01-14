@@ -1,0 +1,64 @@
+/// *** ///
+
+// CLIENT MESSAGE: GET / HTTP/1.1
+// Accept: application/json, text/plain, */*
+// Content-Type: text/plain
+// User-Agent: bruno-runtime/2.9.1
+// request-start-time: 1764782766231
+// Content-Length: 4
+// Accept-Encoding: gzip, compress, deflate, br
+// Host: 127.0.0.1:3000
+// Connection: keep-alive
+
+// test
+
+/// *** ///
+
+void strip_space(char *src, uint32_t line_len) {
+    uint32_t p1 = 0;
+    uint32_t p2 = 0;
+    
+    for(; p1 < line_len; ++p1) {
+	    if(!isspace(src[p1])) {
+		    src[p2] = src[p1];
+		    ++p2;
+	    }
+    }
+    
+    src[p2] = '\0';
+}
+
+// void req_handler(char *buffer) {
+//     char *saveptr_line;
+//     char *line = strtok_r(buffer, "\n", &saveptr_line);
+//     bool first_line = true;
+
+//     while(line != NULL) {
+// 	strip_space(line, strlen(line));
+// 	if(first_line) {
+// 		//char *saveptr_sub_token;
+// 		//char *method = strtok_r(line, " ", &saveptr_sub_token);
+// 	    	//char *path = strtok_r(NULL, " ", &saveptr_sub_token);
+// 		//char *version = strtok_r(NULL, " ", &saveptr_sub_token);
+	   	
+// 		//strip_space(line, strlen(line));
+
+// 		//printf("%s%s%s\n", method, path, version);
+// 		first_line = false;
+// 		continue;
+// 	} else {
+// 		char *saveptr_sub_token;
+
+// 		char *header_name = strtok_r(line, ":", &saveptr_sub_token);
+// 		char *header_value = strtok_r(NULL, "", &saveptr_sub_token);
+
+// 		if(header_name && header_value) {
+// 			printf("%s: %s\n", header_name, header_value);
+// 		}
+// 	}	
+// 	//    strip_space(line, strlen(line));
+//         // printf("%s\n", line);
+	
+// 	line = strtok_r(NULL, "\n", &saveptr_line);
+//     }
+// }
