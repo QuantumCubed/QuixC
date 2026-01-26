@@ -14,6 +14,7 @@
 #include <stdatomic.h>
 #include <ctype.h>
 #include <stdint.h>
+#include <time.h>
 
 // volatile sig_atomic_t SHUTDOWN_REQ = 0;
 // const char *IP = "0.0.0.0";
@@ -62,7 +63,7 @@ static int SERVER_SOCKET_INIT(HTTP_SERVER *app) {
         exit(1);
     }
 
-    printf("The Server Is Listening On:\nIP: %s\nPORT: %u\n\n", app -> HOST_IP, app -> PORT);
+    printf("\nThe Server Is Listening On:\nIP: %s\nPORT: %u\n\n", app -> HOST_IP, app -> PORT);
 
     return server_socket;
 }
@@ -81,7 +82,119 @@ static int SERVER_SOCKET_TERMINATE(int server_socket_fd) {
     return 0;
 }
 
-void req_handler(mString *str) {
+HttpMethod parse_method(const char *method_str) {
+    if (strcmp(method_str, "GET") == 0) return HTTP_GET;
+    if (strcmp(method_str, "POST") == 0) return HTTP_POST;
+    if (strcmp(method_str, "PUT") == 0) return HTTP_PUT;
+    if (strcmp(method_str, "DELETE") == 0) return HTTP_DELETE;
+    return HTTP_UNKNOWN;    
+}
+
+HttpProtocol parse_protocol(const char *protocol_str) {
+    if (strcmp(protocol_str, "HTTP/1.0") == 0) return HTTP_1_0;
+    if (strcmp(protocol_str, "HTTP/1.1") == 0) return HTTP_1_1;
+    if (strcmp(protocol_str, "HTTP/2.0") == 0) return HTTP_2_0;
+    return PROTOCOL_UNKNOWN;
+}
+
+void register_route(HTTP_SERVER *app, HttpMethod method, const char *route_str, void (*callback)(HttpRequest *req, HttpResponse *res)) { // (req, res) : const void *callback(HttpRequest req)
+    
+    Route route;
+
+    route.method = method;
+    route.route_str = route_str;
+    route.route_callback = callback;
+    
+    arraylist_append(app -> routes, &route); // should be fine due to memcpy arraylist impl *I think?*
+}
+
+const char* protocol_to_string(HttpProtocol protocol) {
+    switch (protocol) {
+        case HTTP_1_0: return "HTTP/1.0";
+        case HTTP_1_1: return "HTTP/1.1";
+        case HTTP_2_0: return "HTTP/2.0";
+        default: return "HTTP/1.1";  // fallback
+    }
+}
+
+const char* status_code_to_string(int status_code) {
+    switch (status_code) {
+        case 200: return "200 OK";
+        case 201: return "201 Created";
+        case 400: return "400 Bad Request";
+        case 404: return "404 Not Found";
+        case 500: return "500 Internal Server Error";
+        default: return "500 Internal Server Error";
+    }
+}
+
+void response_send(HttpResponse *res, char *body_t, char *body, int status) {
+
+    res -> status = status;
+
+    char res_buffer[1000];
+    char date_buffer[64];
+
+    time_t now = time(NULL);
+    struct tm *gmt = gmtime(&now);
+
+    strftime(date_buffer, sizeof(date_buffer), "%a, %d %b %Y %H:%M:%S GMT", gmt);
+
+    snprintf(res_buffer, 1000,
+        "%s %s\r\n"
+        "Server: C-Server\r\n"
+        "Date: %s\r\n"
+        "Content-Length: %zu\r\n"
+        "Content-Type: %s\r\n"
+        "Cache-Control: no-store\r\n"
+        "\r\n"
+        "%s",
+        protocol_to_string(res -> proto),
+        status_code_to_string(res -> status),
+        date_buffer,
+        strlen(body),
+        body_t,
+        body
+    );
+
+    printf("\n********* RESPONSE MESSAGE *********\n");
+
+    printf("\n%s\n", res_buffer);
+
+    printf("********* **************** *********\n");
+}
+
+void parse_route(HTTP_SERVER *app, HttpRequest *req, HttpResponse *res) {
+
+    ArrayList *routes = app -> routes;
+    int route_index = -1;
+
+    // eventually switch to a memory mapping with route as key instead of looping through
+    // might be multiple instances of the same ROUTE with different METHODS
+    
+    for(size_t i = 0; i < routes -> size; ++i) {
+        const char *route_str = ((Route *) arraylist_get(routes, i)) -> route_str;
+        if(strcmp((req -> route) -> chars, route_str) == 0) { // strcmp returns 0 if equal for some reason -_-
+            route_index = i;
+        }
+    }
+
+    if(route_index < 0) return;
+
+    Route *rte_ptr = (Route *) arraylist_get(routes, route_index);
+
+    if(req -> method != rte_ptr -> method) return; // if HTTP Method between registered & req do not match
+
+    rte_ptr -> route_callback(req, res);
+
+}
+
+void parse_request(HTTP_SERVER *app, mString *str) {
+
+    HttpRequest req;
+    HttpResponse res;
+
+    res.sent = false; // add "sent checking"; if callback fn defined by user forgets to send a response, send a default response
 
     printf("Request Length: %zu\n", str -> length);
     // puts(str -> chars);
@@ -90,14 +203,16 @@ void req_handler(mString *str) {
 
     printf("Number of Tokens: %zu\n\n", tokens -> size);
 
-    mString *curr_tok = *(mString **) arraylist_get(tokens, 0);
+    mString *sl_tok = *(mString **) arraylist_get(tokens, 0);
 
-    ArrayList *curr_tok_subtokens = m_string_tokenize(curr_tok, " ");
+    ArrayList *sl_tok_subtokens = m_string_tokenize(sl_tok, " ");
 
-    printf("Subtokens: %zu\n", curr_tok_subtokens -> size);
-    printf("Method: %s\nRoute: %s\nProtocol: %s\n\n", (*(mString **) arraylist_get(curr_tok_subtokens, 0)) -> chars, (*(mString **) arraylist_get(curr_tok_subtokens, 1)) -> chars, (*(mString **) arraylist_get(curr_tok_subtokens, 2)) -> chars);
-
-    arraylist_destroy(curr_tok_subtokens);
+    if(sl_tok_subtokens -> size == 3) {
+        printf("Method: %s\nRoute: %s\nProtocol: %s\n\n", (*(mString **) arraylist_get(sl_tok_subtokens, 0)) -> chars, (*(mString **) arraylist_get(sl_tok_subtokens, 1)) -> chars, (*(mString **) arraylist_get(sl_tok_subtokens, 2)) -> chars);
+        req.method = parse_method((*(mString **) arraylist_get(sl_tok_subtokens, 0)) -> chars);
+        req.route = (*(mString **) arraylist_get(sl_tok_subtokens, 1));
+        req.proto = parse_protocol((*(mString **) arraylist_get(sl_tok_subtokens, 2)) -> chars);
+    }
 
     for(size_t i = 1; i < (tokens -> size) - 2; ++i) { // skip start line, empty line, and body (headers only)
         mString *tok_ptr = *(mString **) arraylist_get(tokens, i);
@@ -110,8 +225,13 @@ void req_handler(mString *str) {
         } else {
             printf("\n"); // no delimeter for subtoken e.g. empty line between header & body, req body itself
         }
-        arraylist_destroy(subtokens);
+        arraylist_destroy(subtokens); // eventually add to arraylist and let arraylist take ownership
     }
+
+    printf("\nEmpty Line: %s\n", (*(mString **) arraylist_get(tokens, (tokens -> size) - 2)) -> chars);
+    printf("Body: %s\n\n", (*(mString **) arraylist_get(tokens, (tokens -> size) - 1)) -> chars);
+
+    req.body = (*(mString **) arraylist_get(tokens, (tokens -> size) - 1));
 
     // for(size_t i = 0; i < tokens -> size; ++i) {
     //     mString *tok_ptr = *(mString **) arraylist_get(tokens, i);
@@ -121,6 +241,18 @@ void req_handler(mString *str) {
     //     }
     //     printf("%s\n***TOKEN***\n", tok_ptr -> chars);
     // }
+
+    printf("********* REQUEST STRUCT *********\n");
+    printf("%d\n", req.method);
+    puts(req.route -> chars);
+    printf("%d\n", req.proto);
+    // puts(req.headers);
+    puts(req.body -> chars);
+    printf("********* ************** *********\n\n");
+
+    parse_route(app, &req, &res);
+
+    arraylist_destroy(sl_tok_subtokens);
     arraylist_destroy(tokens);
 }
 
@@ -144,13 +276,16 @@ HTTP_SERVER *http_server_create(const char *HOST_IP, const uint16_t PORT) {
     app -> HOST_IP = HOST_IP;
     app -> PORT = PORT;
 
+    app -> routes = arraylist_create(10, sizeof(Route), NULL); // no cleanup callbacks required (all members are stack)
+
     return app;
 }
 
-void http_server_destroy(HTTP_SERVER *self) {
-    if(!self) return;
+void http_server_destroy(HTTP_SERVER *app) {
+    if(!app) return;
 
-    free(self);
+    arraylist_destroy(app -> routes); // cleanup routes arraylist
+    free(app);
 }
 
 int http_server_run(HTTP_SERVER *app) {
@@ -176,7 +311,7 @@ int http_server_run(HTTP_SERVER *app) {
         recv(client_socket, buffer.chars, HTTP_BUFFER_SIZE - 1, 0);
 
         buffer.length = strlen(buffer.chars);
-        req_handler(&buffer);
+        parse_request(app, &buffer);
 
         char dummy_response[] = "HTTP/1.1 200 OK\r\nServer: C-Server\r\nDate: Wed, 03 Dec 2025 12:32:00 GMT\r\nContent-Length: 4\r\nContent-Type: text/html\r\nCache-Control: no-store\r\n\r\nRESP";
 
