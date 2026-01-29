@@ -15,6 +15,7 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <time.h>
+#include <strings.h>
 
 #define M_STRING_ARR_GET(mString_ArrayList, index) *(mString **) arraylist_get(mString_ArrayList, index)
 
@@ -289,6 +290,16 @@ void http_server_destroy(HTTP_SERVER *app) {
     arraylist_destroy(app -> routes); // cleanup routes arraylist
     free(app);
 }
+// RETURNS INDEX IF MATCH, -1 IF NOT FOUND
+ssize_t http_header_map_contains(HttpHeaderMap *map, const char *header) {
+    for(size_t i = 0; i < map -> count; ++i) {
+        if(strcasecmp(map -> headers[i].key -> chars, header) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 // HTTP REQUEST MUST TAKE OWNERSHIP FOR ALL HEAP-ALLOCATED MEMBERS/SUB-MEMBERS
 HttpRequest *http_request_create(mString *req_buffer) {
     HttpRequest *req = (HttpRequest *) malloc(sizeof(HttpRequest));
@@ -322,42 +333,69 @@ HttpRequest *http_request_create(mString *req_buffer) {
 
     printf("Number of Lines: %zu\n\n", lines -> size);
 
-    // printf("Request Info: %s\n", (M_STRING_ARR_GET(tokens, 0)) -> chars);
-    // printf("Body: %s\n", (M_STRING_ARR_GET(tokens, 1)) -> chars);
-
     // PARSE START LINE
-    
-    // mString *sl_tok = M_STRING_ARR_GET(tokens, 0);
 
-    // ArrayList *sl_tok_subtokens = m_string_tokenize(sl_tok, " ");
+    ArrayList *sl_tok_subtokens = m_string_tokenize(M_STRING_ARR_GET(lines, 0), " ");
+
+    if(!sl_tok_subtokens || sl_tok_subtokens -> size != 3) {
+        fprintf(stderr, "SL_TOK_ERROR!\n");
+        arraylist_destroy(lines);
+        arraylist_destroy(sections);
+        return NULL;
+    }
+
+    printf("Method: %s\nRoute: %s\nProtocol: %s\n\n", (M_STRING_ARR_GET(sl_tok_subtokens, 0)) -> chars, (M_STRING_ARR_GET(sl_tok_subtokens, 1)) -> chars, (M_STRING_ARR_GET(sl_tok_subtokens, 2)) -> chars);
+    
+    req -> method = parse_method((M_STRING_ARR_GET(sl_tok_subtokens, 0)) -> chars);
+    req -> route = m_string_dup((M_STRING_ARR_GET(sl_tok_subtokens, 1)));
+    req -> proto = parse_protocol((M_STRING_ARR_GET(sl_tok_subtokens, 2)) -> chars);
+    
+    arraylist_destroy(sl_tok_subtokens);
 
     // PARSE HEADERS
+    
+    for(size_t i = 1; i < lines -> size; ++i) {
+        ArrayList *header_line = m_string_tokenize(M_STRING_ARR_GET(lines, i), ":");
 
-    // SKIP STARTLINE AND END BEFORE EMPTY LINE + BODY (HEADERS ONLY)
+        if((header_line -> size) > 1) {
+            mString *key = M_STRING_ARR_GET(header_line, 0);
+            mString *value = M_STRING_ARR_GET(header_line, 1);
 
-    // for(size_t i = 1; i < (tokens -> size) - 2; ++i) {
-    //     m_string_trim_leading_whitespace(M_STRING_ARR_GET(tokens, i));
-    //     ArrayList *subtokens = m_string_tokenize(M_STRING_ARR_GET(tokens, i), ":");
+            m_string_trim_leading_whitespace(key);
+            m_string_trim_leading_whitespace(value);
 
-    //     mString *key = (M_STRING_ARR_GET(subtokens, 0));
-    //     m_string_trim_leading_whitespace(key);
-    //     printf("Key: %s\n",  key -> chars);
+            if((req -> header_map.count) + 1 >= req -> header_map.capacity) {
+                size_t x2_capacity = (req -> header_map.capacity) * 2;
+                req -> header_map.headers = realloc(req -> header_map.headers, sizeof(HttpHeader) * x2_capacity);
+                if(!(req -> header_map.headers)) {
+                    fprintf(stderr, "HEADER REALLOC FAIL!\n");
+                    arraylist_destroy(header_line);
+                    return NULL;
+                }
+                req -> header_map.capacity = x2_capacity;
+            }
 
-    //     if(subtokens -> size > 1) {
-    //         mString *value = (M_STRING_ARR_GET(subtokens, 1));
-    //         m_string_trim_leading_whitespace(value);
-    //         printf("Value: %s\n", value -> chars);
-    //     } else {
-    //         printf("\n"); // no delimeter for subtoken e.g. empty line between header & body, req body itself
-    //     }
-    //     arraylist_destroy(subtokens);
-    // }
+            req -> header_map.headers[req -> header_map.count].key = m_string_dup(key);
+            req -> header_map.headers[req -> header_map.count].value = m_string_dup(value);
+            req -> header_map.count++;
 
+            printf("%s: %s\n", key -> chars, value -> chars);
+        }
+        arraylist_destroy(header_line);
+    }
+
+    ssize_t found = http_header_map_contains(&(req -> header_map), "content-length");
+
+    if(found != -1) {
+        req -> body_length = (size_t) strtoul(req -> header_map.headers[found].value -> chars, NULL, 10);
+    }
 
     // PARSE BODY
+    // if method has body allocate space...
+    if(req -> method != HTTP_GET) {
+        req -> body = m_string(req -> body_length);
+    }
 
-
-    // arraylist_destroy(sl_tok_subtokens);
     arraylist_destroy(lines);
     arraylist_destroy(sections);
 
@@ -370,7 +408,20 @@ void http_request_destroy(HttpRequest *req) {
         fprintf(stderr, "Request Cleanup Error!\n");
         return;
     }
-    // free req -> body as well
+
+    m_string_destroy(req -> route);
+
+    for(size_t i = 0; i < req -> header_map.count; ++i) {
+        m_string_destroy(req -> header_map.headers[i].key);
+        m_string_destroy(req -> header_map.headers[i].value);
+    }
+
+    free(req -> header_map.headers);
+    
+    if(req -> body) {
+        m_string_destroy(req -> body);
+    }
+
     free(req);
 }
 
@@ -402,11 +453,14 @@ int http_server_run(HTTP_SERVER *app) {
             continue;
         }
 
-        String *request_buffer = m_string(8192);
+        mString *request_buffer = m_string(TCP_BUFF_MAX);
 
-        ssize_t bytes = recv(client_socket, request_buffer -> chars, HTTP_BUFFER_SIZE - 1, 0);
+        ssize_t bytes = recv(client_socket, request_buffer -> chars, TCP_BUFF_MAX - 1, 0);
 
-        request_buffer -> length = strlen(request_buffer -> chars);
+        if(bytes > 0) {
+            request_buffer -> chars[bytes] = '\0';
+            request_buffer -> length = bytes;
+        }
 
         // http_request_parse(app, &request_buffer);
 

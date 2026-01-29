@@ -21,7 +21,7 @@
 #include <stdint.h>
 #include <time.h>
 
-#define HTTP_BUFFER_SIZE 1000
+#define TCP_BUFF_MAX 8192
 #define MAX_METHOD_LEN 16
 #define MAX_PATH_LEN 2048
 #define MAX_HEADER_NAME_LEN 256

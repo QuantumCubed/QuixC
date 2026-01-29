@@ -316,19 +316,19 @@ mString *m_string_dup(mString *self) {
 
 	if(!dup) {
 		fprintf(stderr, "ERROR ALLOC DUP STR!\n");
-		return;
+		return NULL;
 	}
 
 	dup -> _origin_ptr = (char *) malloc(self -> capacity);
 	if(!(dup -> _origin_ptr)) {
 		fprintf(stderr, "ERROR ALLOC DUP STR (ORIGIN PTR)!\n");
 		free(dup);
-		return;
+		return NULL;
 	}
 	dup -> chars = dup -> _origin_ptr;
-	dup -> capacity = (self -> length) + 1;
+	dup -> capacity = self -> capacity;
 	dup -> _heap_allocated = true;
-	
+
 	size_t i = 0;
 
 	for(; i < self -> length; ++i) {
@@ -336,6 +336,8 @@ mString *m_string_dup(mString *self) {
 	}
 
 	(dup -> chars)[i] = '\0';
+
+	dup -> length = i;
 
 	return dup;
 }
