@@ -309,3 +309,33 @@ ArrayList *m_string_tokenize(const mString *self, const char *delimiter) {
     }
 	return tokens;
 }
+
+// HEAP ALLOCATED DUPLICATE OF MSTRING (DOES NOT FREE ORIGINAL MSTRING)
+mString *m_string_dup(mString *self) {
+	mString *dup = (mString *) malloc(sizeof(mString));
+
+	if(!dup) {
+		fprintf(stderr, "ERROR ALLOC DUP STR!\n");
+		return;
+	}
+
+	dup -> _origin_ptr = (char *) malloc(self -> capacity);
+	if(!(dup -> _origin_ptr)) {
+		fprintf(stderr, "ERROR ALLOC DUP STR (ORIGIN PTR)!\n");
+		free(dup);
+		return;
+	}
+	dup -> chars = dup -> _origin_ptr;
+	dup -> capacity = (self -> length) + 1;
+	dup -> _heap_allocated = true;
+	
+	size_t i = 0;
+
+	for(; i < self -> length; ++i) {
+		(dup -> chars)[i] = (self -> chars)[i];
+	}
+
+	(dup -> chars)[i] = '\0';
+
+	return dup;
+}

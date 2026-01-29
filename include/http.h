@@ -55,12 +55,24 @@ typedef enum HttpProtocol {
     PROTOCOL_UNKNOWN
 } HttpProtocol;
 
+typedef struct HttpHeader {
+    mString *key;
+    mString *value;
+} HttpHeader;
+
+typedef struct HttpHeaderMap {
+    HttpHeader *headers;
+    size_t count;
+    size_t capacity;
+} HttpHeaderMap;
+
 typedef struct HttpRequest {
     HttpMethod method;
     mString *route;
     HttpProtocol proto;
-    ArrayList *headers;
+    HttpHeaderMap header_map;
     mString *body;
+    size_t body_length;
 } HttpRequest;
 
 typedef struct HttpResponse {

@@ -16,6 +16,8 @@
 #include <stdint.h>
 #include <time.h>
 
+#define M_STRING_ARR_GET(mString_ArrayList, index) *(mString **) arraylist_get(mString_ArrayList, index)
+
 // volatile sig_atomic_t SHUTDOWN_REQ = 0;
 // const char *IP = "0.0.0.0";
 // const uint16_t PORT = 3000;
@@ -287,6 +289,102 @@ void http_server_destroy(HTTP_SERVER *app) {
     arraylist_destroy(app -> routes); // cleanup routes arraylist
     free(app);
 }
+// HTTP REQUEST MUST TAKE OWNERSHIP FOR ALL HEAP-ALLOCATED MEMBERS/SUB-MEMBERS
+HttpRequest *http_request_create(mString *req_buffer) {
+    HttpRequest *req = (HttpRequest *) malloc(sizeof(HttpRequest));
+
+    req -> header_map.capacity = 16;
+    req -> header_map.count = 0;
+    req -> header_map.headers = (HttpHeader *) malloc(req -> header_map.capacity * sizeof(HttpHeader));
+    req -> route = NULL;
+    req -> body = NULL;
+
+    if(!req) {
+        // ERROR
+        fprintf(stderr, "HttpRequest Alloc Error!\n");
+        return NULL;
+    }
+
+    if(!(req -> header_map.headers)) {
+         // ERROR
+        fprintf(stderr, "HttpHeader Alloc Error!\n");
+        free(req);
+        return NULL;
+    }
+
+    printf("Request Length: %zu\n", req_buffer -> length);
+
+    ArrayList *sections = m_string_tokenize(req_buffer, "\r\n\r\n");
+
+    printf("Number of Sections: %zu\n", sections -> size);
+
+    ArrayList *lines = m_string_tokenize(M_STRING_ARR_GET(sections, 0), "\r\n");
+
+    printf("Number of Lines: %zu\n\n", lines -> size);
+
+    // printf("Request Info: %s\n", (M_STRING_ARR_GET(tokens, 0)) -> chars);
+    // printf("Body: %s\n", (M_STRING_ARR_GET(tokens, 1)) -> chars);
+
+    // PARSE START LINE
+    
+    // mString *sl_tok = M_STRING_ARR_GET(tokens, 0);
+
+    // ArrayList *sl_tok_subtokens = m_string_tokenize(sl_tok, " ");
+
+    // PARSE HEADERS
+
+    // SKIP STARTLINE AND END BEFORE EMPTY LINE + BODY (HEADERS ONLY)
+
+    // for(size_t i = 1; i < (tokens -> size) - 2; ++i) {
+    //     m_string_trim_leading_whitespace(M_STRING_ARR_GET(tokens, i));
+    //     ArrayList *subtokens = m_string_tokenize(M_STRING_ARR_GET(tokens, i), ":");
+
+    //     mString *key = (M_STRING_ARR_GET(subtokens, 0));
+    //     m_string_trim_leading_whitespace(key);
+    //     printf("Key: %s\n",  key -> chars);
+
+    //     if(subtokens -> size > 1) {
+    //         mString *value = (M_STRING_ARR_GET(subtokens, 1));
+    //         m_string_trim_leading_whitespace(value);
+    //         printf("Value: %s\n", value -> chars);
+    //     } else {
+    //         printf("\n"); // no delimeter for subtoken e.g. empty line between header & body, req body itself
+    //     }
+    //     arraylist_destroy(subtokens);
+    // }
+
+
+    // PARSE BODY
+
+
+    // arraylist_destroy(sl_tok_subtokens);
+    arraylist_destroy(lines);
+    arraylist_destroy(sections);
+
+    return req;
+}
+
+void http_request_destroy(HttpRequest *req) {
+    if(!req) {
+        // problem
+        fprintf(stderr, "Request Cleanup Error!\n");
+        return;
+    }
+    // free req -> body as well
+    free(req);
+}
+
+HttpResponse *http_response_create() {
+    HttpResponse *res = (HttpResponse *) malloc(sizeof(HttpResponse));
+
+    res -> sent = false;
+
+    return res;
+}
+
+void http_response_destroy(HttpResponse *res) {
+
+}
 
 int http_server_run(HTTP_SERVER *app) {
 
@@ -304,18 +402,29 @@ int http_server_run(HTTP_SERVER *app) {
             continue;
         }
 
-        // char buffer[BUFFER_SIZE];
+        String *request_buffer = m_string(8192);
 
-        Str buffer = m_str(HTTP_BUFFER_SIZE);
+        ssize_t bytes = recv(client_socket, request_buffer -> chars, HTTP_BUFFER_SIZE - 1, 0);
 
-        recv(client_socket, buffer.chars, HTTP_BUFFER_SIZE - 1, 0);
+        request_buffer -> length = strlen(request_buffer -> chars);
 
-        buffer.length = strlen(buffer.chars);
-        parse_request(app, &buffer);
+        // http_request_parse(app, &request_buffer);
+
+        // do some bounds checking e.g. realloc if needed
+
+        HttpRequest *req = http_request_create(request_buffer);
+        // HttpResponse *res = http_response_create();
+
+        // http_request_router();
+
+        // http_response_send();
 
         char dummy_response[] = "HTTP/1.1 200 OK\r\nServer: C-Server\r\nDate: Wed, 03 Dec 2025 12:32:00 GMT\r\nContent-Length: 4\r\nContent-Type: text/html\r\nCache-Control: no-store\r\n\r\nRESP";
-
         send(client_socket, dummy_response, strlen(dummy_response), 0);
+
+        http_request_destroy(req);
+        // http_response_destroy(res);
+        m_string_destroy(request_buffer);
 
         close(client_socket);
     }
@@ -324,3 +433,6 @@ int http_server_run(HTTP_SERVER *app) {
 
     return (cleanup_status == SERVER_OK) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
+
+   // char dummy_response[] = "HTTP/1.1 200 OK\r\nServer: C-Server\r\nDate: Wed, 03 Dec 2025 12:32:00 GMT\r\nContent-Length: 4\r\nContent-Type: text/html\r\nCache-Control: no-store\r\n\r\nRESP";
+   // send(client_socket, dummy_response, strlen(dummy_response), 0);
