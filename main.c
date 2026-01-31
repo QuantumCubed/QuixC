@@ -2,7 +2,7 @@
 
 void do_something(HttpRequest *req, HttpResponse *res) {
     printf("This is something!\n");
-    response_send(res, "text/html", "<h1><b>RESP</b></h1>", 200);
+    http_response_build(res, "<h1><b>RESP</b></h1>", 200); // add headers
 }
 
 int main(void) {

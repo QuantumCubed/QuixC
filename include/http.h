@@ -36,7 +36,7 @@ enum SERVER_CODES {
 };
 
 typedef enum HttpStatusCode {
-    SUCESS = 200,
+    OK = 200,
     RESOURCE_NOT_FOUND = 404,
 } HttpStatusCode;
 
@@ -72,14 +72,13 @@ typedef struct HttpRequest {
     HttpProtocol proto;
     HttpHeaderMap header_map;
     mString *body;
-    size_t body_length;
 } HttpRequest;
 
 typedef struct HttpResponse {
-    HttpProtocol proto;
     HttpStatusCode status;
-    // headers
-    bool sent;
+    HttpProtocol proto;
+    HttpHeaderMap header_map;
+    mString *body;
 } HttpResponse;
 
 typedef struct Route {
@@ -99,6 +98,6 @@ HTTP_SERVER *http_server_create(const char *HOST_IP, const uint16_t PORT);
 void http_server_destroy(HTTP_SERVER *app);
 int http_server_run(HTTP_SERVER *app);
 void register_route(HTTP_SERVER *app, HttpMethod method, const char *route_str, void (*callback)(HttpRequest *req, HttpResponse *res)); // void *callback(HttpRequest req)
-void response_send(HttpResponse *res, char *body_t, char *body, int status);
+void http_response_build(HttpResponse *res, char *body, HttpStatusCode status);
 
 #endif

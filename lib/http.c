@@ -133,7 +133,7 @@ const char* status_code_to_string(int status_code) {
 
 void response_send(HttpResponse *res, char *body_t, char *body, int status) {
 
-    res -> status = status;
+    // res -> status = status;
 
     char res_buffer[1000];
     char date_buffer[64];
@@ -153,7 +153,7 @@ void response_send(HttpResponse *res, char *body_t, char *body, int status) {
         "\r\n"
         "%s",
         protocol_to_string(res -> proto),
-        status_code_to_string(res -> status),
+        // status_code_to_string(res -> status),
         date_buffer,
         strlen(body),
         body_t,
@@ -197,7 +197,7 @@ void parse_request(HTTP_SERVER *app, mString *str) {
     HttpRequest req;
     HttpResponse res;
 
-    res.sent = false; // add "sent checking"; if callback fn defined by user forgets to send a response, send a default response
+    // res.sent = false; // add "sent checking"; if callback fn defined by user forgets to send a response, send a default response
 
     printf("Request Length: %zu\n", str -> length);
     // puts(str -> chars);
@@ -384,16 +384,20 @@ HttpRequest *http_request_create(mString *req_buffer) {
         arraylist_destroy(header_line);
     }
 
+    // CONTENT-LENGTH HEADER (SPECIFICALLY)
+
     ssize_t found = http_header_map_contains(&(req -> header_map), "content-length");
+    ssize_t body_length;
+
 
     if(found != -1) {
-        req -> body_length = (size_t) strtoul(req -> header_map.headers[found].value -> chars, NULL, 10);
+        body_length = (size_t) strtoul(req -> header_map.headers[found].value -> chars, NULL, 10);
     }
 
     // PARSE BODY
     // if method has body allocate space...
     if(req -> method != HTTP_GET) {
-        req -> body = m_string(req -> body_length);
+        req -> body = m_string(body_length);
     }
 
     arraylist_destroy(lines);
@@ -425,16 +429,93 @@ void http_request_destroy(HttpRequest *req) {
     free(req);
 }
 
-HttpResponse *http_response_create() {
+Route *http_request_router(ArrayList *app_routes, HttpRequest *req) {
+    int route_index = -1;
+
+    // 1. Find Route ... 2. Ensure Route Requirements Met ...
+    
+    for(size_t i = 0; i < app_routes -> size; ++i) {
+        const char *route_str = ((Route *) arraylist_get(app_routes, i)) -> route_str;
+        if(strcmp((req -> route) -> chars, route_str) == 0) { // strcmp returns 0 if equal for some reason -_-
+            route_index = i;
+        }
+    }
+
+    if(route_index < 0) return NULL;
+
+    Route *rte_ptr = (Route *) arraylist_get(app_routes, route_index);
+
+    if(req -> method != rte_ptr -> method) return NULL; // if HTTP Method between registered & req do not match
+
+    // RETURN -1 if auth headers or other required params for request are not in request
+
+    return rte_ptr;
+}
+
+void http_request_execute(const Route *route, HttpRequest *req, HttpResponse *res) {
+    
+    // add protocol verification etc (unless that is in http_request_router)
+    res -> proto = req -> proto;
+    route -> route_callback(req, res);
+}
+
+void http_response_build(HttpResponse *res, char *body, HttpStatusCode status) {
+
+    res -> body = m_string_from_cstr(body);
+    res -> status = status;
+}
+
+void http_response_send(int client_socket, HttpResponse *res) {
+    // size_t response_buffer_size = (strlen(body) + 1) + 1000;
+    // res -> response_buffer = m_string(response_buffer_size); // body + other res info
+    // "text/html",
+
+    char header_buffer[4096]; // switch to defined macro size
+    char date_buffer[64];
+
+    time_t now = time(NULL);
+    struct tm *gmt = gmtime(&now);
+
+    strftime(date_buffer, sizeof(date_buffer), "%a, %d %b %Y %H:%M:%S GMT", gmt);
+
+    int header_length = snprintf(header_buffer, sizeof(header_buffer),
+        "%s %s\r\n"
+        "Server: C-Server\r\n"
+        "Date: %s\r\n"
+        "Content-Length: %zu\r\n"
+        "Content-Type: %s\r\n"
+        "Cache-Control: no-store\r\n"
+        "\r\n",
+        protocol_to_string(res -> proto),
+        status_code_to_string(res -> status),
+        date_buffer,
+        res -> body -> length, // replace
+        "text/html" // make dynamic
+    );
+
+    // add if check
+
+    (void) send(client_socket, header_buffer, header_length, 0);
+
+    printf("%s\n", res -> body -> chars);
+
+    (void) send(client_socket, res -> body -> chars, res -> body -> length, 0);
+}
+
+HttpResponse *http_response_create(int client_socket) {
     HttpResponse *res = (HttpResponse *) malloc(sizeof(HttpResponse));
 
-    res -> sent = false;
+    // res -> sent = false;
 
     return res;
 }
 
 void http_response_destroy(HttpResponse *res) {
-
+    if(!res) {
+        fprintf(stderr, "NULL POINTER!\n");
+        return;
+    }
+    m_string_destroy(res -> body);
 }
 
 int http_server_run(HTTP_SERVER *app) {
@@ -460,6 +541,8 @@ int http_server_run(HTTP_SERVER *app) {
         if(bytes > 0) {
             request_buffer -> chars[bytes] = '\0';
             request_buffer -> length = bytes;
+        } else {
+            continue;
         }
 
         // http_request_parse(app, &request_buffer);
@@ -467,17 +550,24 @@ int http_server_run(HTTP_SERVER *app) {
         // do some bounds checking e.g. realloc if needed
 
         HttpRequest *req = http_request_create(request_buffer);
-        // HttpResponse *res = http_response_create();
+        HttpResponse *res = http_response_create(client_socket);
 
-        // http_request_router();
+        const Route *route = http_request_router(app -> routes, req);
 
-        // http_response_send();
+        if(!route) {
+            // route to ERROR RESPONSE
+            continue;
+        }
 
-        char dummy_response[] = "HTTP/1.1 200 OK\r\nServer: C-Server\r\nDate: Wed, 03 Dec 2025 12:32:00 GMT\r\nContent-Length: 4\r\nContent-Type: text/html\r\nCache-Control: no-store\r\n\r\nRESP";
-        send(client_socket, dummy_response, strlen(dummy_response), 0);
+        http_request_execute(route, req, res);
+
+        http_response_send(client_socket, res);
+
+        // char dummy_response[] = "HTTP/1.1 200 OK\r\nServer: C-Server\r\nDate: Wed, 03 Dec 2025 12:32:00 GMT\r\nContent-Length: 4\r\nContent-Type: text/html\r\nCache-Control: no-store\r\n\r\nRESP";
+        // (void) send(client_socket, res -> , , 0);
 
         http_request_destroy(req);
-        // http_response_destroy(res);
+        http_response_destroy(res);
         m_string_destroy(request_buffer);
 
         close(client_socket);
