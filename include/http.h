@@ -1,68 +1,45 @@
 #ifndef HTTP_H
 #define HTTP_H
 
-#include <stdlib.h>
-#include <stdint.h>
-#include "http.h"
 #include "mstring.h"
 #include "arraylist.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <arpa/inet.h>
-#include <errno.h>
-#include <string.h>
-#include <unistd.h>
-#include <signal.h>
-#include <stdatomic.h>
-#include <ctype.h>
-#include <stdint.h>
-#include <time.h>
 
-#define TCP_BUFF_MAX 8192
-#define MAX_METHOD_LEN 16
-#define MAX_PATH_LEN 2048
-#define MAX_HEADER_NAME_LEN 256
-#define MAX_HEADER_VALUE_LEN 8192
-
-enum SERVER_CODES {
+typedef enum QuixC_Server_Codes {
     SERVER_OK = 0,
     SERVER_ERR_CLOSE = 1,
     SERVER_ERR_BIND  = 2,
     SERVER_ERR_LISTEN = 3,
     SERVER_ERR_ACCEPT = 4,
-};
+} QuixC_Server_Codes;
 
-typedef enum HttpStatusCode {
+typedef enum QuixC_Status_Code {
     OK = 200,
     RESOURCE_NOT_FOUND = 404,
-} HttpStatusCode;
+} QuixC_Status_Code;
 
-typedef enum HttpMethod {
+typedef enum QuixC_Method {
     HTTP_GET,
     HTTP_POST,
     HTTP_PUT,
     HTTP_DELETE,
     HTTP_UNKNOWN
-} HttpMethod;
+} QuixC_Method;
 
-typedef enum HttpProtocol {
+typedef enum QuixC_Protocol {
     HTTP_1_0, // 1.0
     HTTP_1_1, // 1.1
     HTTP_2_0, // 2.0
     PROTOCOL_UNKNOWN
-} HttpProtocol;
+} QuixC_Protocol;
 
-typedef enum HttpBody_t {
+typedef enum QuixC_Body_t {
     BODY_TYPE_STRING,
     BODY_TYPE_FILE,
     BODY_TYPE_BUFFER,
     BODY_TYPE_SENDFILE
-} HttpBody_t;
+} QuixC_Body_t;
 
-typedef struct HttpBody {
+typedef struct QuixC_Body {
     HttpBody_t type;
     size_t content_length;
     union {
@@ -74,51 +51,51 @@ typedef struct HttpBody {
             void *binary;
         } buffer;
     } content;
-} HttpBody;
+} QuixC_Body;
 
-typedef struct HttpHeader {
+typedef struct QuixC_Header {
     mString *key;
     mString *value;
-} HttpHeader;
+} QuixC_Header;
 
-typedef struct HttpHeaderMap {
+typedef struct QuixC_Header_Map {
     HttpHeader *headers;
     size_t count;
     size_t capacity;
-} HttpHeaderMap;
+} QuixC_Header_Map;
 
-typedef struct HttpRequest {
+typedef struct QuixC_Request {
     HttpMethod method;
     mString *route;
     HttpProtocol proto;
     HttpHeaderMap header_map;
     mString *body; // change eventually to HttpBody
-} HttpRequest;
+} QuixC_Request;
 
-typedef struct HttpResponse {
+typedef struct QuixC_Response {
     HttpProtocol proto;
     HttpStatusCode status;
     HttpHeaderMap header_map;
     HttpBody *body;
-} HttpResponse;
+} QuixC_Response;
 
-typedef struct Route {
+typedef struct QuixC_Router {
     HttpMethod method;
     const char *route_str;
     void (*route_callback)(HttpRequest *req, HttpResponse *res);
-} Route;
+} QuixC_Router;
 
-typedef struct HTTP_SERVER {
+typedef struct QuixC {
     volatile sig_atomic_t SHUTDOWN_REQ;
     const char *HOST_IP;
     uint16_t PORT;
     ArrayList *routes;
-} HTTP_SERVER;
+} QuixC;
 
-HTTP_SERVER *http_server_create(const char *HOST_IP, const uint16_t PORT);
-void http_server_destroy(HTTP_SERVER *app);
-int http_server_run(HTTP_SERVER *app);
-void register_route(HTTP_SERVER *app, HttpMethod method, const char *route_str, void (*callback)(HttpRequest *req, HttpResponse *res)); // void *callback(HttpRequest req)
+QuixC *quixc_create(const char *HOST_IP, const uint16_t PORT);
+void quixc_cleanup(QuixC *app);
+int quixc_run(QuixC *app);
+void register_route(QuixC *app, HttpMethod method, const char *route_str, void (*callback)(HttpRequest *req, HttpResponse *res)); // void *callback(HttpRequest req)
 bool http_header_add(HttpHeaderMap *map, const char *key, const char *value);
 
 #endif

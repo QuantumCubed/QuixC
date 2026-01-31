@@ -1,6 +1,7 @@
 #include "http.h"
-#include <stdio.h>
 #include <sys/stat.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 void do_something(HttpRequest *req, HttpResponse *res) {
     // add headers
@@ -20,7 +21,7 @@ void homepage(HttpRequest *req, HttpResponse *res) {
     res -> body -> type = BODY_TYPE_SENDFILE;
 
     struct stat st;
-    
+
     if(stat("./static/index.html", &st) == 0) {
         res -> body -> content_length = st.st_size;
     }
@@ -29,12 +30,12 @@ void homepage(HttpRequest *req, HttpResponse *res) {
 }
 
 int main(void) {
-    HTTP_SERVER *app = http_server_create("0.0.0.0", 3000);
+    QuixC *app = http_server_create("0.0.0.0", 3000);
 
     // register routes before running app loop
 
-    register_route(app, HTTP_GET, "/something", do_something);
     register_route(app, HTTP_GET, "/", homepage);
+    register_route(app, HTTP_GET, "/something", do_something);
 
     int cleanup_status = http_server_run(app);
 
