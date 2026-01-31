@@ -323,9 +323,21 @@ bool http_header_add(HttpHeaderMap *map, const char *key, const char *value) {
         }
         map -> capacity = x2_capacity;
     }
+
+    // (prevents duplicate headers)
+
+    ssize_t key_index = http_header_map_contains(map, key);
+
+    if(key_index != -1) {
+        m_string_destroy(map -> headers[key_index].value);
+        map -> headers[key_index].value = map -> headers[map -> count].value = m_string_from_cstr(value);
+        return true;
+    }
+
     map -> headers[map -> count].key = m_string_from_cstr(key);
     map -> headers[map -> count].value = m_string_from_cstr(value);
     map -> count++;
+
     return true;
 }
 
@@ -393,7 +405,7 @@ HttpRequest *http_request_create(mString *req_buffer) {
         }
         arraylist_destroy(header_line);
     }
-
+    
     // CONTENT-LENGTH HEADER (SPECIFICALLY)
 
     ssize_t found = http_header_map_contains(&(req -> header_map), "content-length");
@@ -536,6 +548,10 @@ HttpResponse *http_response_create(int client_socket) {
         return NULL;
     }
 
+    // DEFAULT RESPONSE HEADERS
+
+    http_header_add(&(res -> header_map), "content-type", "text/html");
+
     return res;
 }
 
@@ -577,8 +593,6 @@ int http_server_run(HTTP_SERVER *app) {
             continue;
         }
 
-        // http_request_parse(app, &request_buffer);
-
         // do some bounds checking e.g. realloc if needed
 
         HttpRequest *req = http_request_create(request_buffer);
@@ -594,9 +608,6 @@ int http_server_run(HTTP_SERVER *app) {
         http_request_execute(route, req, res);
 
         http_response_send(client_socket, res);
-
-        // char dummy_response[] = "HTTP/1.1 200 OK\r\nServer: C-Server\r\nDate: Wed, 03 Dec 2025 12:32:00 GMT\r\nContent-Length: 4\r\nContent-Type: text/html\r\nCache-Control: no-store\r\n\r\nRESP";
-        // (void) send(client_socket, res -> , , 0);
 
         http_request_destroy(req);
         http_response_destroy(res);
