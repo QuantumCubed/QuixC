@@ -65,32 +65,50 @@
 // 	return 0;
 // }
 
+// int main(void) {
+
+//     Str newStr = m_str(256);
+
+//     m_string_write(&newStr, "This\r\nis\r\nan\r\nexample\r\nstring!");
+
+//     // printf("%s\n", newStr.chars);
+
+//     // m_string_substring(&subStr, &newStr, 18, newStr.length);
+
+//     ArrayList *tokens = m_string_tokenize(&newStr, "\r\n");
+
+//     printf("ArrayList Size: %zu\n", tokens -> size);
+
+//     for(size_t i = 0; i < tokens -> size; ++i) {
+//         String *ptr = *(String **) arraylist_get(tokens, i);
+//         if(i + 1 == tokens -> size) {
+//             printf("%s\n", ptr -> chars);
+//             break;
+//         }        
+//         printf("%s", ptr -> chars);
+//     }
+
+//     // puts(newStr.chars);
+
+//     arraylist_destroy(tokens);
+
+// 	return 0;
+// }
+
+
 int main(void) {
 
-    Str newStr = m_str(256);
+    mString *str = m_string(20);
 
-    m_string_write(&newStr, "This\r\nis\r\nan\r\nexample\r\nstring!");
+    m_string_write(str, "This is a str!");
 
-    // printf("%s\n", newStr.chars);
+    printf("String: %s\nLength: %zu\nCapacity: %zu\n", str -> chars, str -> length, str -> capacity);
 
-    // m_string_substring(&subStr, &newStr, 18, newStr.length);
+    mString *dup = m_string_dup(str);
 
-    ArrayList *tokens = m_string_tokenize(&newStr, "\r\n");
+    m_string_destroy(str);
 
-    printf("ArrayList Size: %zu\n", tokens -> size);
+    printf("String: %s\nLength: %zu\nCapacity: %zu\n", dup -> chars, dup -> length, dup -> capacity);
 
-    for(size_t i = 0; i < tokens -> size; ++i) {
-        String *ptr = *(String **) arraylist_get(tokens, i);
-        if(i + 1 == tokens -> size) {
-            printf("%s\n", ptr -> chars);
-            break;
-        }        
-        printf("%s", ptr -> chars);
-    }
-
-    // puts(newStr.chars);
-
-    arraylist_destroy(tokens);
-
-	return 0;
+    return 0;
 }

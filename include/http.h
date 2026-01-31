@@ -21,7 +21,7 @@
 #include <stdint.h>
 #include <time.h>
 
-#define HTTP_BUFFER_SIZE 1000
+#define TCP_BUFF_MAX 8192
 #define MAX_METHOD_LEN 16
 #define MAX_PATH_LEN 2048
 #define MAX_HEADER_NAME_LEN 256
@@ -36,7 +36,7 @@ enum SERVER_CODES {
 };
 
 typedef enum HttpStatusCode {
-    SUCESS = 200,
+    OK = 200,
     RESOURCE_NOT_FOUND = 404,
 } HttpStatusCode;
 
@@ -55,19 +55,30 @@ typedef enum HttpProtocol {
     PROTOCOL_UNKNOWN
 } HttpProtocol;
 
+typedef struct HttpHeader {
+    mString *key;
+    mString *value;
+} HttpHeader;
+
+typedef struct HttpHeaderMap {
+    HttpHeader *headers;
+    size_t count;
+    size_t capacity;
+} HttpHeaderMap;
+
 typedef struct HttpRequest {
     HttpMethod method;
     mString *route;
     HttpProtocol proto;
-    ArrayList *headers;
+    HttpHeaderMap header_map;
     mString *body;
 } HttpRequest;
 
 typedef struct HttpResponse {
-    HttpProtocol proto;
     HttpStatusCode status;
-    // headers
-    bool sent;
+    HttpProtocol proto;
+    HttpHeaderMap header_map;
+    mString *body;
 } HttpResponse;
 
 typedef struct Route {
@@ -87,6 +98,6 @@ HTTP_SERVER *http_server_create(const char *HOST_IP, const uint16_t PORT);
 void http_server_destroy(HTTP_SERVER *app);
 int http_server_run(HTTP_SERVER *app);
 void register_route(HTTP_SERVER *app, HttpMethod method, const char *route_str, void (*callback)(HttpRequest *req, HttpResponse *res)); // void *callback(HttpRequest req)
-void response_send(HttpResponse *res, char *body_t, char *body, int status);
+void http_response_build(HttpResponse *res, char *body, HttpStatusCode status);
 
 #endif

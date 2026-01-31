@@ -42,5 +42,7 @@ void m_string_trim_trailing_whitespace(mString *self);
 void m_string_trim_all_whitespace(mString *self);
 void m_string_substring(mString *dst, const mString *src, size_t start_index, size_t end_index);
 ArrayList *m_string_tokenize(const mString *src, const char *delimeter);
+mString *m_string_dup(mString *self);
+mString *m_string_from_cstr(const char *str);
 
 #endif

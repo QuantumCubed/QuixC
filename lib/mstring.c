@@ -309,3 +309,66 @@ ArrayList *m_string_tokenize(const mString *self, const char *delimiter) {
     }
 	return tokens;
 }
+
+// HEAP ALLOCATED DUPLICATE OF MSTRING (DOES NOT FREE ORIGINAL MSTRING)
+mString *m_string_dup(mString *self) {
+	mString *dup = (mString *) malloc(sizeof(mString));
+
+	if(!dup) {
+		fprintf(stderr, "ERROR ALLOC DUP STR!\n");
+		return NULL;
+	}
+
+	dup -> _origin_ptr = (char *) malloc(self -> capacity);
+	if(!(dup -> _origin_ptr)) {
+		fprintf(stderr, "ERROR ALLOC DUP STR (ORIGIN PTR)!\n");
+		free(dup);
+		return NULL;
+	}
+	dup -> chars = dup -> _origin_ptr;
+	dup -> capacity = self -> capacity;
+	dup -> _heap_allocated = true;
+
+	memcpy(dup -> chars, self -> chars, self -> length);
+
+	// size_t i = 0;
+
+	// for(; i < self -> length; ++i) {
+	// 	(dup -> chars)[i] = (self -> chars)[i];
+	// }
+
+	// (dup -> chars)[i] = '\0';
+
+	// dup -> length = i;
+
+	(dup -> chars)[self -> length] = '\0';
+	dup -> length = self -> length;
+
+	return dup;
+}
+
+inline mString *m_string_from_cstr(const char *str) {
+
+	size_t str_len = strlen(str);
+
+	String *s = (String *) malloc(sizeof(String));
+	if(!s) {
+		fprintf(stderr, "String Alloc ERR!\n");
+	}
+	s -> _origin_ptr = (char *) malloc(str_len + 1);
+	if(!s -> _origin_ptr) {
+		fprintf(stderr, "Chars Alloc ERR!\n");
+		free(s);
+		return NULL;
+	}
+
+	s -> chars = s -> _origin_ptr;
+
+	memcpy(s -> chars, str, str_len);
+
+	s -> length = str_len;
+	s -> capacity = str_len + 1;
+	s -> _heap_allocated = true;
+	s -> chars[str_len] = '\0'; // set chars i --> NULL Term
+	return s;	
+}

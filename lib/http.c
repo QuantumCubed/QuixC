@@ -15,6 +15,9 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <time.h>
+#include <strings.h>
+
+#define M_STRING_ARR_GET(mString_ArrayList, index) *(mString **) arraylist_get(mString_ArrayList, index)
 
 // volatile sig_atomic_t SHUTDOWN_REQ = 0;
 // const char *IP = "0.0.0.0";
@@ -130,7 +133,7 @@ const char* status_code_to_string(int status_code) {
 
 void response_send(HttpResponse *res, char *body_t, char *body, int status) {
 
-    res -> status = status;
+    // res -> status = status;
 
     char res_buffer[1000];
     char date_buffer[64];
@@ -150,7 +153,7 @@ void response_send(HttpResponse *res, char *body_t, char *body, int status) {
         "\r\n"
         "%s",
         protocol_to_string(res -> proto),
-        status_code_to_string(res -> status),
+        // status_code_to_string(res -> status),
         date_buffer,
         strlen(body),
         body_t,
@@ -194,7 +197,7 @@ void parse_request(HTTP_SERVER *app, mString *str) {
     HttpRequest req;
     HttpResponse res;
 
-    res.sent = false; // add "sent checking"; if callback fn defined by user forgets to send a response, send a default response
+    // res.sent = false; // add "sent checking"; if callback fn defined by user forgets to send a response, send a default response
 
     printf("Request Length: %zu\n", str -> length);
     // puts(str -> chars);
@@ -287,6 +290,233 @@ void http_server_destroy(HTTP_SERVER *app) {
     arraylist_destroy(app -> routes); // cleanup routes arraylist
     free(app);
 }
+// RETURNS INDEX IF MATCH, -1 IF NOT FOUND
+ssize_t http_header_map_contains(HttpHeaderMap *map, const char *header) {
+    for(size_t i = 0; i < map -> count; ++i) {
+        if(strcasecmp(map -> headers[i].key -> chars, header) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// HTTP REQUEST MUST TAKE OWNERSHIP FOR ALL HEAP-ALLOCATED MEMBERS/SUB-MEMBERS
+HttpRequest *http_request_create(mString *req_buffer) {
+    HttpRequest *req = (HttpRequest *) malloc(sizeof(HttpRequest));
+
+    req -> header_map.capacity = 16;
+    req -> header_map.count = 0;
+    req -> header_map.headers = (HttpHeader *) malloc(req -> header_map.capacity * sizeof(HttpHeader));
+    req -> route = NULL;
+    req -> body = NULL;
+
+    if(!req) {
+        // ERROR
+        fprintf(stderr, "HttpRequest Alloc Error!\n");
+        return NULL;
+    }
+
+    if(!(req -> header_map.headers)) {
+         // ERROR
+        fprintf(stderr, "HttpHeader Alloc Error!\n");
+        free(req);
+        return NULL;
+    }
+
+    printf("Request Length: %zu\n", req_buffer -> length);
+
+    ArrayList *sections = m_string_tokenize(req_buffer, "\r\n\r\n");
+
+    printf("Number of Sections: %zu\n", sections -> size);
+
+    ArrayList *lines = m_string_tokenize(M_STRING_ARR_GET(sections, 0), "\r\n");
+
+    printf("Number of Lines: %zu\n\n", lines -> size);
+
+    // PARSE START LINE
+
+    ArrayList *sl_tok_subtokens = m_string_tokenize(M_STRING_ARR_GET(lines, 0), " ");
+
+    if(!sl_tok_subtokens || sl_tok_subtokens -> size != 3) {
+        fprintf(stderr, "SL_TOK_ERROR!\n");
+        arraylist_destroy(lines);
+        arraylist_destroy(sections);
+        return NULL;
+    }
+
+    printf("Method: %s\nRoute: %s\nProtocol: %s\n\n", (M_STRING_ARR_GET(sl_tok_subtokens, 0)) -> chars, (M_STRING_ARR_GET(sl_tok_subtokens, 1)) -> chars, (M_STRING_ARR_GET(sl_tok_subtokens, 2)) -> chars);
+    
+    req -> method = parse_method((M_STRING_ARR_GET(sl_tok_subtokens, 0)) -> chars);
+    req -> route = m_string_dup((M_STRING_ARR_GET(sl_tok_subtokens, 1)));
+    req -> proto = parse_protocol((M_STRING_ARR_GET(sl_tok_subtokens, 2)) -> chars);
+    
+    arraylist_destroy(sl_tok_subtokens);
+
+    // PARSE HEADERS
+    
+    for(size_t i = 1; i < lines -> size; ++i) {
+        ArrayList *header_line = m_string_tokenize(M_STRING_ARR_GET(lines, i), ":");
+
+        if((header_line -> size) > 1) {
+            mString *key = M_STRING_ARR_GET(header_line, 0);
+            mString *value = M_STRING_ARR_GET(header_line, 1);
+
+            m_string_trim_leading_whitespace(key);
+            m_string_trim_leading_whitespace(value);
+
+            if((req -> header_map.count) + 1 >= req -> header_map.capacity) {
+                size_t x2_capacity = (req -> header_map.capacity) * 2;
+                req -> header_map.headers = realloc(req -> header_map.headers, sizeof(HttpHeader) * x2_capacity);
+                if(!(req -> header_map.headers)) {
+                    fprintf(stderr, "HEADER REALLOC FAIL!\n");
+                    arraylist_destroy(header_line);
+                    return NULL;
+                }
+                req -> header_map.capacity = x2_capacity;
+            }
+
+            req -> header_map.headers[req -> header_map.count].key = m_string_dup(key);
+            req -> header_map.headers[req -> header_map.count].value = m_string_dup(value);
+            req -> header_map.count++;
+
+            printf("%s: %s\n", key -> chars, value -> chars);
+        }
+        arraylist_destroy(header_line);
+    }
+
+    // CONTENT-LENGTH HEADER (SPECIFICALLY)
+
+    ssize_t found = http_header_map_contains(&(req -> header_map), "content-length");
+    ssize_t body_length;
+
+
+    if(found != -1) {
+        body_length = (size_t) strtoul(req -> header_map.headers[found].value -> chars, NULL, 10);
+    }
+
+    // PARSE BODY
+    // if method has body allocate space...
+    if(req -> method != HTTP_GET) {
+        req -> body = m_string(body_length);
+    }
+
+    arraylist_destroy(lines);
+    arraylist_destroy(sections);
+
+    return req;
+}
+
+void http_request_destroy(HttpRequest *req) {
+    if(!req) {
+        // problem
+        fprintf(stderr, "Request Cleanup Error!\n");
+        return;
+    }
+
+    m_string_destroy(req -> route);
+
+    for(size_t i = 0; i < req -> header_map.count; ++i) {
+        m_string_destroy(req -> header_map.headers[i].key);
+        m_string_destroy(req -> header_map.headers[i].value);
+    }
+
+    free(req -> header_map.headers);
+    
+    if(req -> body) {
+        m_string_destroy(req -> body);
+    }
+
+    free(req);
+}
+
+Route *http_request_router(ArrayList *app_routes, HttpRequest *req) {
+    int route_index = -1;
+
+    // 1. Find Route ... 2. Ensure Route Requirements Met ...
+    
+    for(size_t i = 0; i < app_routes -> size; ++i) {
+        const char *route_str = ((Route *) arraylist_get(app_routes, i)) -> route_str;
+        if(strcmp((req -> route) -> chars, route_str) == 0) { // strcmp returns 0 if equal for some reason -_-
+            route_index = i;
+        }
+    }
+
+    if(route_index < 0) return NULL;
+
+    Route *rte_ptr = (Route *) arraylist_get(app_routes, route_index);
+
+    if(req -> method != rte_ptr -> method) return NULL; // if HTTP Method between registered & req do not match
+
+    // RETURN -1 if auth headers or other required params for request are not in request
+
+    return rte_ptr;
+}
+
+void http_request_execute(const Route *route, HttpRequest *req, HttpResponse *res) {
+    
+    // add protocol verification etc (unless that is in http_request_router)
+    res -> proto = req -> proto;
+    route -> route_callback(req, res);
+}
+
+void http_response_build(HttpResponse *res, char *body, HttpStatusCode status) {
+
+    res -> body = m_string_from_cstr(body);
+    res -> status = status;
+}
+
+void http_response_send(int client_socket, HttpResponse *res) {
+    // size_t response_buffer_size = (strlen(body) + 1) + 1000;
+    // res -> response_buffer = m_string(response_buffer_size); // body + other res info
+    // "text/html",
+
+    char header_buffer[4096]; // switch to defined macro size
+    char date_buffer[64];
+
+    time_t now = time(NULL);
+    struct tm *gmt = gmtime(&now);
+
+    strftime(date_buffer, sizeof(date_buffer), "%a, %d %b %Y %H:%M:%S GMT", gmt);
+
+    int header_length = snprintf(header_buffer, sizeof(header_buffer),
+        "%s %s\r\n"
+        "Server: C-Server\r\n"
+        "Date: %s\r\n"
+        "Content-Length: %zu\r\n"
+        "Content-Type: %s\r\n"
+        "Cache-Control: no-store\r\n"
+        "\r\n",
+        protocol_to_string(res -> proto),
+        status_code_to_string(res -> status),
+        date_buffer,
+        res -> body -> length, // replace
+        "text/html" // make dynamic
+    );
+
+    // add if check
+
+    (void) send(client_socket, header_buffer, header_length, 0);
+
+    printf("%s\n", res -> body -> chars);
+
+    (void) send(client_socket, res -> body -> chars, res -> body -> length, 0);
+}
+
+HttpResponse *http_response_create(int client_socket) {
+    HttpResponse *res = (HttpResponse *) malloc(sizeof(HttpResponse));
+
+    // res -> sent = false;
+
+    return res;
+}
+
+void http_response_destroy(HttpResponse *res) {
+    if(!res) {
+        fprintf(stderr, "NULL POINTER!\n");
+        return;
+    }
+    m_string_destroy(res -> body);
+}
 
 int http_server_run(HTTP_SERVER *app) {
 
@@ -304,18 +534,41 @@ int http_server_run(HTTP_SERVER *app) {
             continue;
         }
 
-        // char buffer[BUFFER_SIZE];
+        mString *request_buffer = m_string(TCP_BUFF_MAX);
 
-        Str buffer = m_str(HTTP_BUFFER_SIZE);
+        ssize_t bytes = recv(client_socket, request_buffer -> chars, TCP_BUFF_MAX - 1, 0);
 
-        recv(client_socket, buffer.chars, HTTP_BUFFER_SIZE - 1, 0);
+        if(bytes > 0) {
+            request_buffer -> chars[bytes] = '\0';
+            request_buffer -> length = bytes;
+        } else {
+            continue;
+        }
 
-        buffer.length = strlen(buffer.chars);
-        parse_request(app, &buffer);
+        // http_request_parse(app, &request_buffer);
 
-        char dummy_response[] = "HTTP/1.1 200 OK\r\nServer: C-Server\r\nDate: Wed, 03 Dec 2025 12:32:00 GMT\r\nContent-Length: 4\r\nContent-Type: text/html\r\nCache-Control: no-store\r\n\r\nRESP";
+        // do some bounds checking e.g. realloc if needed
 
-        send(client_socket, dummy_response, strlen(dummy_response), 0);
+        HttpRequest *req = http_request_create(request_buffer);
+        HttpResponse *res = http_response_create(client_socket);
+
+        const Route *route = http_request_router(app -> routes, req);
+
+        if(!route) {
+            // route to ERROR RESPONSE
+            continue;
+        }
+
+        http_request_execute(route, req, res);
+
+        http_response_send(client_socket, res);
+
+        // char dummy_response[] = "HTTP/1.1 200 OK\r\nServer: C-Server\r\nDate: Wed, 03 Dec 2025 12:32:00 GMT\r\nContent-Length: 4\r\nContent-Type: text/html\r\nCache-Control: no-store\r\n\r\nRESP";
+        // (void) send(client_socket, res -> , , 0);
+
+        http_request_destroy(req);
+        http_response_destroy(res);
+        m_string_destroy(request_buffer);
 
         close(client_socket);
     }
@@ -324,3 +577,6 @@ int http_server_run(HTTP_SERVER *app) {
 
     return (cleanup_status == SERVER_OK) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
+
+   // char dummy_response[] = "HTTP/1.1 200 OK\r\nServer: C-Server\r\nDate: Wed, 03 Dec 2025 12:32:00 GMT\r\nContent-Length: 4\r\nContent-Type: text/html\r\nCache-Control: no-store\r\n\r\nRESP";
+   // send(client_socket, dummy_response, strlen(dummy_response), 0);
