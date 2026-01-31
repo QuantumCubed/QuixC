@@ -55,6 +55,27 @@ typedef enum HttpProtocol {
     PROTOCOL_UNKNOWN
 } HttpProtocol;
 
+typedef enum HttpBody_t {
+    BODY_TYPE_STRING,
+    BODY_TYPE_FILE,
+    BODY_TYPE_BUFFER,
+    BODY_TYPE_SENDFILE
+} HttpBody_t;
+
+typedef struct HttpBody {
+    HttpBody_t type;
+    size_t content_length;
+    union {
+        const char *string;
+        struct {
+            const char *filepath;
+        } file;
+        struct {
+            void *binary;
+        } buffer;
+    } content;
+} HttpBody;
+
 typedef struct HttpHeader {
     mString *key;
     mString *value;
@@ -71,14 +92,14 @@ typedef struct HttpRequest {
     mString *route;
     HttpProtocol proto;
     HttpHeaderMap header_map;
-    mString *body;
+    mString *body; // change eventually to HttpBody
 } HttpRequest;
 
 typedef struct HttpResponse {
     HttpProtocol proto;
     HttpStatusCode status;
     HttpHeaderMap header_map;
-    mString *body;
+    HttpBody *body;
 } HttpResponse;
 
 typedef struct Route {
@@ -98,7 +119,6 @@ HTTP_SERVER *http_server_create(const char *HOST_IP, const uint16_t PORT);
 void http_server_destroy(HTTP_SERVER *app);
 int http_server_run(HTTP_SERVER *app);
 void register_route(HTTP_SERVER *app, HttpMethod method, const char *route_str, void (*callback)(HttpRequest *req, HttpResponse *res)); // void *callback(HttpRequest req)
-void http_response_build(HttpResponse *res, char *body, HttpStatusCode status);
 bool http_header_add(HttpHeaderMap *map, const char *key, const char *value);
 
 #endif

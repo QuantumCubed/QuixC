@@ -1,8 +1,6 @@
 #include "http.h"
 #include <stdio.h>
-#include <fcntl.h>       // For open() and O_RDONLY
-#include <sys/stat.h>    // For fstat() and struct stat
-#include <unistd.h>      // For close() and lseek()
+#include <sys/stat.h>
 
 void do_something(HttpRequest *req, HttpResponse *res) {
     // add headers
@@ -11,29 +9,24 @@ void do_something(HttpRequest *req, HttpResponse *res) {
     http_header_add(&(res -> header_map), "content-type", "application/json");
     http_header_add(&(res -> header_map), "cache-control", "no-store");
 
-    http_response_build(res, "{ \"status\": \"OK\" }", 200); // make this json not bs somehow
+    res -> body -> content.string = "{ \"status\": \"OK\" }";  // make this json not bs somehow
+    res -> body -> content_length = strlen(res -> body -> content.string);
+    res -> body -> type = BODY_TYPE_STRING;
+    res -> status = 200;
 }
 
-// void homepage(HttpRequest *req, HttpResponse *res) {
-//     int fd = open("./static/hello.html", O_RDONLY);
+void homepage(HttpRequest *req, HttpResponse *res) {
+    res -> body -> content.file.filepath = "./static/index.html";
+    res -> body -> type = BODY_TYPE_SENDFILE;
 
-//     if(fd == -1) {
-//         perror("File Open Fail!");
-//         return;
-//     }
+    struct stat st;
+    
+    if(stat("./static/index.html", &st) == 0) {
+        res -> body -> content_length = st.st_size;
+    }
 
-//     struct stat st;
-
-//     if(fstat(fd, &st) == -1) {
-//         perror("fstat");
-//         close(fd);
-//         return;
-//     }
-
-//     size_t file_size = st.st_size;
-
-//     http_response_build(res, NULL, 200);
-// }
+    res -> status = 200;
+}
 
 int main(void) {
     HTTP_SERVER *app = http_server_create("0.0.0.0", 3000);
@@ -41,7 +34,7 @@ int main(void) {
     // register routes before running app loop
 
     register_route(app, HTTP_GET, "/something", do_something);
-    // register_route(app, HTTP_GET, "/", homepage);
+    register_route(app, HTTP_GET, "/", homepage);
 
     int cleanup_status = http_server_run(app);
 

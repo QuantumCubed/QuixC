@@ -16,6 +16,10 @@
 #include <stdint.h>
 #include <time.h>
 #include <strings.h>
+#include <fcntl.h>       // For open() and O_RDONLY
+#include <sys/stat.h>    // For fstat() and struct stat
+#include <unistd.h>      // For close() and lseek()
+#include <sys/sendfile.h>
 
 #define M_STRING_ARR_GET(mString_ArrayList, index) *(mString **) arraylist_get(mString_ArrayList, index)
 
@@ -490,16 +494,7 @@ void http_request_execute(const Route *route, HttpRequest *req, HttpResponse *re
     route -> route_callback(req, res);
 }
 
-void http_response_build(HttpResponse *res, char *body, HttpStatusCode status) {
-
-    res -> body = m_string_from_cstr(body);
-    res -> status = status;
-}
-
 void http_response_send(int client_socket, HttpResponse *res) {
-    // size_t response_buffer_size = (strlen(body) + 1) + 1000;
-    // res -> response_buffer = m_string(response_buffer_size); // body + other res info
-    // "text/html",
 
     char header_buffer[4096]; // switch to defined macro size
     char date_buffer[64];
@@ -529,7 +524,7 @@ void http_response_send(int client_socket, HttpResponse *res) {
         "Date: %s\r\n"
         "Content-Length: %zu\r\n",
         date_buffer,
-        res -> body ? res -> body -> length : 0
+        res -> body ? res -> body -> content_length : 0
     );
 
     // dynamically add user-defined headers
@@ -546,11 +541,42 @@ void http_response_send(int client_socket, HttpResponse *res) {
 
     offset += snprintf(header_buffer + offset, sizeof(header_buffer) - offset, "\r\n");
 
-    if(res -> body) printf("%s\n", res -> body -> chars);
+    // switch send to writev (eventually)
 
     (void) send(client_socket, header_buffer, offset, 0);
 
-    (void) send(client_socket, res -> body -> chars, res -> body -> length, 0);
+    switch(res -> body -> type) {
+        
+        case BODY_TYPE_STRING:
+            (void) send(client_socket, res -> body -> content.string, res -> body-> content_length, 0);
+        break;
+
+        case BODY_TYPE_SENDFILE:
+            int file_fd = open(res -> body -> content.file.filepath, O_RDONLY);
+
+            if(file_fd == -1) {
+                perror("File Open Fail!");
+                return;
+            }
+
+            off_t offset = 0;
+            ssize_t sent;
+            while(offset < res -> body -> content_length) {
+                sent = sendfile(client_socket, file_fd, &offset, res -> body -> content_length - offset);
+                if(sent <= 0) break;
+            }
+            close(file_fd);
+        break;
+
+        case BODY_TYPE_BUFFER:
+        // IMPLEMENT LATER
+
+        break;
+        
+        default:
+        // ERROR
+        return;
+    }
 }
 
 HttpResponse *http_response_create() {
@@ -558,6 +584,14 @@ HttpResponse *http_response_create() {
 
     if(!res) {
         fprintf(stderr, "HTTP RES ALLOC FAIL!\n");
+        return NULL;
+    }
+
+    res -> body = (HttpBody *) malloc(sizeof(HttpBody));
+
+    if(!(res -> body)) {
+        fprintf(stderr, "HTTP RES-BODY ALLOC FAIL!\n");
+        free(res);
         return NULL;
     }
 
@@ -579,9 +613,15 @@ void http_response_destroy(HttpResponse *res) {
         return;
     }
 
+    // maybe if check
+
+    free(res -> body);
+
+    // res -> body memebers that are heap allocated need to be freed
+
     http_header_map_cleanup(&(res -> header_map));
 
-    m_string_destroy(res -> body);
+    // m_string_destroy(res -> body);
 }
 
 
@@ -626,9 +666,8 @@ int http_server_run(HTTP_SERVER *app) {
             // ADD CLEANUP
             continue;
         }
-
+        
         http_request_execute(route, req, res);
-
         http_response_send(client_socket, res);
 
         http_request_destroy(req);
