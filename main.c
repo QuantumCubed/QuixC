@@ -2,13 +2,14 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-void do_something(HttpRequest *req, HttpResponse *res) {
+void do_something(QuixC_Request *req, QuixC_Response *res) {
     // add headers
     // http_response_build(res, "<h1><b>RESP</b></h1>", 200);
 
-    http_header_add(&(res -> header_map), "content-type", "application/json");
-    http_header_add(&(res -> header_map), "cache-control", "no-store");
+    quixc_header_add(&(res -> header_map), "content-type", "application/json");
+    quixc_header_add(&(res -> header_map), "cache-control", "no-store");
 
     res -> body -> content.string = "{ \"status\": \"OK\" }";  // make this json not bs somehow
     res -> body -> content_length = strlen(res -> body -> content.string);
@@ -16,7 +17,7 @@ void do_something(HttpRequest *req, HttpResponse *res) {
     res -> status = 200;
 }
 
-void homepage(HttpRequest *req, HttpResponse *res) {
+void homepage(QuixC_Request *req, QuixC_Response *res) {
     res -> body -> content.file.filepath = "./static/index.html";
     res -> body -> type = BODY_TYPE_SENDFILE;
 
@@ -30,16 +31,16 @@ void homepage(HttpRequest *req, HttpResponse *res) {
 }
 
 int main(void) {
-    QuixC *app = http_server_create("0.0.0.0", 3000);
+    QuixC *app = quixc_create("0.0.0.0", 3000);
 
     // register routes before running app loop
 
-    register_route(app, HTTP_GET, "/", homepage);
-    register_route(app, HTTP_GET, "/something", do_something);
+    quixc_route_register(app, QuixC_HTTP_GET, "/", homepage);
+    quixc_route_register(app, QuixC_HTTP_GET, "/something", do_something);
 
-    int cleanup_status = http_server_run(app);
+    int cleanup_status = quixc_run(app);
 
-    http_server_destroy(app);
+    quixc_cleanup(app);
 
     return (cleanup_status == EXIT_SUCCESS) ? 0 : 1;
 }

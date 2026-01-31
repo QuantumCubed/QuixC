@@ -15,7 +15,6 @@
 #include <string.h>
 #include <strings.h>
 #include <signal.h>
-#include <stdatomic.h>
 #include <ctype.h>
 #include <stdint.h>
 #include <time.h>
@@ -81,7 +80,7 @@ static int QUIXC_SOCKET_TERMINATE(int server_socket_fd) {
         int error = errno;
         fprintf(stderr, "GRACEFUL SHUTDOWN UNSUCCESSFUL!\n");
         perror("socket_shutdown");
-        return SERVER_ERR_CLOSE;
+        return QuixC_ERR_CLOSE;
     }
 
     printf("GRACEFUL SHUTDOWN SUCCESSFUL!\n");
@@ -92,26 +91,26 @@ static int QUIXC_SOCKET_TERMINATE(int server_socket_fd) {
 
 // *************************** PARSE_FUNCTIONS *************************** //
 
-HttpMethod quixc_method_parse(const char *method_str) {
-    if (strcmp(method_str, "GET") == 0) return HTTP_GET;
-    if (strcmp(method_str, "POST") == 0) return HTTP_POST;
-    if (strcmp(method_str, "PUT") == 0) return HTTP_PUT;
-    if (strcmp(method_str, "DELETE") == 0) return HTTP_DELETE;
-    return HTTP_UNKNOWN;    
+QuixC_Method quixc_method_parse(const char *method_str) {
+    if (strcmp(method_str, "GET") == 0) return QuixC_HTTP_GET;
+    if (strcmp(method_str, "POST") == 0) return QuixC_HTTP_POST;
+    if (strcmp(method_str, "PUT") == 0) return QuixC_HTTP_PUT;
+    if (strcmp(method_str, "DELETE") == 0) return QuixC_HTTP_DELETE;
+    return QuixC_HTTP_UNKNOWN;    
 }
 
-HttpProtocol quixc_protocol_parse(const char *protocol_str) {
-    if (strcmp(protocol_str, "HTTP/1.0") == 0) return HTTP_1_0;
-    if (strcmp(protocol_str, "HTTP/1.1") == 0) return HTTP_1_1;
-    if (strcmp(protocol_str, "HTTP/2.0") == 0) return HTTP_2_0;
-    return PROTOCOL_UNKNOWN;
+QuixC_Protocol quixc_protocol_parse(const char *protocol_str) {
+    if (strcmp(protocol_str, "HTTP/1.0") == 0) return QuixC_HTTP_1_0;
+    if (strcmp(protocol_str, "HTTP/1.1") == 0) return QuixC_HTTP_1_1;
+    if (strcmp(protocol_str, "HTTP/2.0") == 0) return QuixC_HTTP_2_0;
+    return QuixC_PROTOCOL_UNKNOWN;
 }
 
-const char* quixc_proto_to_str(HttpProtocol protocol) {
+const char* quixc_proto_to_str(QuixC_Protocol protocol) {
     switch (protocol) {
-        case HTTP_1_0: return "HTTP/1.0";
-        case HTTP_1_1: return "HTTP/1.1";
-        case HTTP_2_0: return "HTTP/2.0";
+        case QuixC_HTTP_1_0: return "HTTP/1.0";
+        case QuixC_HTTP_1_1: return "HTTP/1.1";
+        case QuixC_HTTP_2_0: return "HTTP/2.0";
         default: return "HTTP/1.1";  // fallback
     }
 }
@@ -132,10 +131,10 @@ const char* quixc_sc_to_str(int status_code) {
 // *************************** HTTP HEADER FUNCTIONS *************************** //
 
 
-bool quixc_header_init(HttpHeaderMap *map) {
+bool quixc_header_init(QuixC_Header_Map *map) {
     map -> capacity = 16;
     map -> count = 0;
-    map -> headers = (HttpHeader *) malloc(map -> capacity * sizeof(HttpHeader));
+    map -> headers = (QuixC_Header *) malloc(map -> capacity * sizeof(QuixC_Header));
 
         if(!(map -> headers)) {
          // ERROR
@@ -145,7 +144,7 @@ bool quixc_header_init(HttpHeaderMap *map) {
     return true;
 }
 
-void quixc_header_map_cleanup(HttpHeaderMap *map) {
+void quixc_header_map_cleanup(QuixC_Header_Map *map) {
 
     if(!map) {
         fprintf(stderr, "NULL POINTER!\n");
@@ -160,7 +159,7 @@ void quixc_header_map_cleanup(HttpHeaderMap *map) {
 }
 
 // RETURNS INDEX IF MATCH, -1 IF NOT FOUND
-ssize_t quixc_header_map_contains(HttpHeaderMap *map, const char *header) {
+ssize_t quixc_header_map_contains(QuixC_Header_Map *map, const char *header) {
     for(size_t i = 0; i < map -> count; ++i) {
         if(strcasecmp(map -> headers[i].key -> chars, header) == 0) {
             return i;
@@ -169,10 +168,10 @@ ssize_t quixc_header_map_contains(HttpHeaderMap *map, const char *header) {
     return -1;
 }
 
-bool quixc_header_add(HttpHeaderMap *map, const char *key, const char *value) {
+bool quixc_header_add(QuixC_Header_Map *map, const char *key, const char *value) {
     if((map -> count) + 1 >= map -> capacity) {
         size_t x2_capacity = (map -> capacity) * 2;
-        map -> headers = realloc(map -> headers, sizeof(HttpHeader) * x2_capacity);
+        map -> headers = realloc(map -> headers, sizeof(QuixC_Header) * x2_capacity);
         if(!(map -> headers)) {
             fprintf(stderr, "HEADER REALLOC FAIL!\n");
             return false;
@@ -182,7 +181,7 @@ bool quixc_header_add(HttpHeaderMap *map, const char *key, const char *value) {
 
     // (prevents duplicate headers)
 
-    ssize_t key_index = http_header_map_contains(map, key);
+    ssize_t key_index = quixc_header_map_contains(map, key);
 
     if(key_index != -1) {
         m_string_destroy(map -> headers[key_index].value);
@@ -202,8 +201,8 @@ bool quixc_header_add(HttpHeaderMap *map, const char *key, const char *value) {
 // *************************** HTTP REQUEST FUNCTIONS *************************** //
 
 // HTTP REQUEST MUST TAKE OWNERSHIP FOR ALL HEAP-ALLOCATED MEMBERS/SUB-MEMBERS
-HttpRequest *quixc_request_create(mString *req_buffer) {
-    HttpRequest *req = (HttpRequest *) malloc(sizeof(HttpRequest));
+QuixC_Request *quixc_request_create(mString *req_buffer) {
+    QuixC_Request *req = (QuixC_Request *) malloc(sizeof(QuixC_Request));
 
     req -> route = NULL;
     req -> body = NULL;
@@ -214,7 +213,7 @@ HttpRequest *quixc_request_create(mString *req_buffer) {
         return NULL;
     }
 
-    if(!(http_header_init(&(req -> header_map)))) { free(req); return NULL; }
+    if(!(quixc_header_init(&(req -> header_map)))) { free(req); return NULL; }
 
     printf("Request Length: %zu\n", req_buffer -> length);
 
@@ -237,11 +236,11 @@ HttpRequest *quixc_request_create(mString *req_buffer) {
         return NULL;
     }
 
-    printf("Method: %s\nRoute: %s\nProtocol: %s\n\n", (M_STRING_ARR_GET(sl_tok_subtokens, 0)) -> chars, (M_STRING_ARR_GET(sl_tok_subtokens, 1)) -> chars, (M_STRING_ARR_GET(sl_tok_subtokens, 2)) -> chars);
+    printf("Method: %s\nQuixC_Route: %s\nProtocol: %s\n\n", (M_STRING_ARR_GET(sl_tok_subtokens, 0)) -> chars, (M_STRING_ARR_GET(sl_tok_subtokens, 1)) -> chars, (M_STRING_ARR_GET(sl_tok_subtokens, 2)) -> chars);
     
-    req -> method = parse_method((M_STRING_ARR_GET(sl_tok_subtokens, 0)) -> chars);
+    req -> method = quixc_method_parse((M_STRING_ARR_GET(sl_tok_subtokens, 0)) -> chars);
     req -> route = m_string_dup((M_STRING_ARR_GET(sl_tok_subtokens, 1)));
-    req -> proto = parse_protocol((M_STRING_ARR_GET(sl_tok_subtokens, 2)) -> chars);
+    req -> proto = quixc_protocol_parse((M_STRING_ARR_GET(sl_tok_subtokens, 2)) -> chars);
     
     arraylist_destroy(sl_tok_subtokens);
 
@@ -257,7 +256,7 @@ HttpRequest *quixc_request_create(mString *req_buffer) {
             m_string_trim_leading_whitespace(key);
             m_string_trim_leading_whitespace(value);
 
-            if(!(http_header_add(&(req -> header_map), key -> chars, value -> chars))) {
+            if(!(quixc_header_add(&(req -> header_map), key -> chars, value -> chars))) {
                 arraylist_destroy(header_line);
                 return NULL;
             }
@@ -268,17 +267,19 @@ HttpRequest *quixc_request_create(mString *req_buffer) {
     
     // CONTENT-LENGTH HEADER (SPECIFICALLY)
 
-    ssize_t found = http_header_map_contains(&(req -> header_map), "content-length");
+    ssize_t found = quixc_header_map_contains(&(req -> header_map), "content-length");
     ssize_t body_length;
 
 
     if(found != -1) {
         body_length = (size_t) strtoul(req -> header_map.headers[found].value -> chars, NULL, 10);
+    } else {
+        body_length = 0;
     }
 
     // PARSE BODY
     // if method has body allocate space...
-    if(req -> method != HTTP_GET) {
+    if(req -> method != QuixC_HTTP_GET) {
         req -> body = m_string(body_length);
     }
 
@@ -288,7 +289,7 @@ HttpRequest *quixc_request_create(mString *req_buffer) {
     return req;
 }
 
-void quixc_request_destroy(HttpRequest *req) {
+void quixc_request_destroy(QuixC_Request *req) {
     if(!req) {
         // problem
         fprintf(stderr, "Request Cleanup Error!\n");
@@ -297,7 +298,7 @@ void quixc_request_destroy(HttpRequest *req) {
 
     m_string_destroy(req -> route);
 
-    http_header_map_cleanup(&(req -> header_map));
+    quixc_header_map_cleanup(&(req -> header_map));
     
     if(req -> body) {
         m_string_destroy(req -> body);
@@ -306,7 +307,7 @@ void quixc_request_destroy(HttpRequest *req) {
     free(req);
 }
 
-void quixc_request_execute(const Route *route, HttpRequest *req, HttpResponse *res) {
+void quixc_request_execute(const QuixC_Route *route, QuixC_Request *req, QuixC_Response *res) {
     
     // add protocol verification etc (unless that is in http_request_router)
     res -> proto = req -> proto;
@@ -317,15 +318,15 @@ void quixc_request_execute(const Route *route, HttpRequest *req, HttpResponse *r
 
 // *************************** HTTP RESPONSE FUNCTIONS *************************** //
 
-HttpResponse *quixc_response_create() {
-    HttpResponse *res = (HttpResponse *) malloc(sizeof(HttpResponse));
+QuixC_Response *quixc_response_create() {
+    QuixC_Response *res = (QuixC_Response *) malloc(sizeof(QuixC_Response));
 
     if(!res) {
         fprintf(stderr, "HTTP RES ALLOC FAIL!\n");
         return NULL;
     }
 
-    res -> body = (HttpBody *) malloc(sizeof(HttpBody));
+    res -> body = (QuixC_Body *) malloc(sizeof(QuixC_Body));
 
     if(!(res -> body)) {
         fprintf(stderr, "HTTP RES-BODY ALLOC FAIL!\n");
@@ -333,19 +334,19 @@ HttpResponse *quixc_response_create() {
         return NULL;
     }
 
-    if(!(http_header_init(&(res -> header_map)))) {
+    if(!(quixc_header_init(&(res -> header_map)))) {
         free(res);
         return NULL;
     }
 
     // DEFAULT RESPONSE HEADERS
 
-    http_header_add(&(res -> header_map), "content-type", "text/html");
+    quixc_header_add(&(res -> header_map), "content-type", "text/html");
 
     return res;
 }
 
-void quixc_response_destroy(HttpResponse *res) {
+void quixc_response_destroy(QuixC_Response *res) {
     if(!res) {
         fprintf(stderr, "NULL POINTER!\n");
         return;
@@ -357,12 +358,12 @@ void quixc_response_destroy(HttpResponse *res) {
 
     // res -> body memebers that are heap allocated need to be freed
 
-    http_header_map_cleanup(&(res -> header_map));
+    quixc_header_map_cleanup(&(res -> header_map));
 
     // m_string_destroy(res -> body);
 }
 
-void quixc_response_send(int client_socket, HttpResponse *res) {
+void quixc_response_send(int client_socket, QuixC_Response *res) {
 
     char header_buffer[4096]; // switch to defined macro size
     char date_buffer[64];
@@ -381,8 +382,8 @@ void quixc_response_send(int client_socket, HttpResponse *res) {
 
     offset += snprintf(header_buffer + offset, sizeof(header_buffer) - offset,
         "%s %s\r\n",
-        protocol_to_string(res -> proto),
-        status_code_to_string(res -> status)
+        quixc_proto_to_str(res -> proto),
+        quixc_sc_to_str(res -> status)
     );
 
     // server-defined headers
@@ -461,7 +462,7 @@ QuixC *quixc_create(const char *HOST_IP, const uint16_t PORT) {
     }
 
     struct sigaction SIGACTION_ARGS;
-    SIGACTION_ARGS.sa_handler = SIGNAL_HANDLER;
+    SIGACTION_ARGS.sa_handler = QUIXC_SIGNAL_HANDLER;
     sigemptyset(&SIGACTION_ARGS.sa_mask);
     SIGACTION_ARGS.sa_flags = 0;   // IMPORTANT: no SA_RESTART
 
@@ -471,7 +472,7 @@ QuixC *quixc_create(const char *HOST_IP, const uint16_t PORT) {
     app -> HOST_IP = HOST_IP;
     app -> PORT = PORT;
 
-    app -> routes = arraylist_create(10, sizeof(Route), NULL); // no cleanup callbacks required (all members are stack)
+    app -> routes = arraylist_create(10, sizeof(QuixC_Route), NULL); // no cleanup callbacks required (all members are stack)
 
     return app;
 }
@@ -483,9 +484,9 @@ void quixc_cleanup(QuixC *app) {
     free(app);
 }
 
-void quixc_route_register(QuixC *app, HttpMethod method, const char *route_str, void (*callback)(HttpRequest *req, HttpResponse *res)) { // (req, res) : const void *callback(HttpRequest req)
+void quixc_route_register(QuixC *app, QuixC_Method method, const char *route_str, void (*callback)(QuixC_Request *req, QuixC_Response *res)) { // (req, res) : const void *callback(HttpRequest req)
     
-    Route route;
+    QuixC_Route route;
 
     route.method = method;
     route.route_str = route_str;
@@ -499,13 +500,13 @@ void quixc_directory_register() {
 }
 
 // REFACTOR TO QuixC ROUTER
-Route *quixc_request_router(ArrayList *app_routes, HttpRequest *req) {
+QuixC_Route *quixc_request_router(ArrayList *app_routes, QuixC_Request *req) {
     int route_index = -1;
 
-    // 1. Find Route ... 2. Ensure Route Requirements Met ...
+    // 1. Find QuixC_Route ... 2. Ensure QuixC_Route Requirements Met ...
     
     for(size_t i = 0; i < app_routes -> size; ++i) {
-        const char *route_str = ((Route *) arraylist_get(app_routes, i)) -> route_str;
+        const char *route_str = ((QuixC_Route *) arraylist_get(app_routes, i)) -> route_str;
         if(strcmp((req -> route) -> chars, route_str) == 0) { // strcmp returns 0 if equal for some reason -_-
             route_index = i;
         }
@@ -513,7 +514,7 @@ Route *quixc_request_router(ArrayList *app_routes, HttpRequest *req) {
 
     if(route_index < 0) return NULL;
 
-    Route *rte_ptr = (Route *) arraylist_get(app_routes, route_index);
+    QuixC_Route *rte_ptr = (QuixC_Route *) arraylist_get(app_routes, route_index);
 
     if(req -> method != rte_ptr -> method) return NULL; // if HTTP Method between registered & req do not match
 
@@ -524,7 +525,7 @@ Route *quixc_request_router(ArrayList *app_routes, HttpRequest *req) {
 
 int quixc_run(QuixC *app) {
 
-    int server_socket = SERVER_SOCKET_INIT(app);
+    int server_socket = QUIXC_SOCKET_INIT(app);
 
     while(!GLOBAL_SHUTDOWN_REQ)
     {
@@ -551,10 +552,10 @@ int quixc_run(QuixC *app) {
 
         // do some bounds checking e.g. realloc if needed
 
-        HttpRequest *req = http_request_create(request_buffer);
-        HttpResponse *res = http_response_create();
+        QuixC_Request *req = quixc_request_create(request_buffer);
+        QuixC_Response *res = quixc_response_create();
 
-        const Route *route = http_request_router(app -> routes, req);
+        const QuixC_Route *route = quixc_request_router(app -> routes, req);
 
         if(!route) {
             // route to ERROR RESPONSE
@@ -563,19 +564,19 @@ int quixc_run(QuixC *app) {
             continue;
         }
         
-        http_request_execute(route, req, res);
-        http_response_send(client_socket, res);
+        quixc_request_execute(route, req, res);
+        quixc_response_send(client_socket, res);
 
-        http_request_destroy(req);
-        http_response_destroy(res);
+        quixc_request_destroy(req);
+        quixc_response_destroy(res);
         m_string_destroy(request_buffer);
 
         close(client_socket);
     }
 
-    int cleanup_status = SERVER_SOCKET_TERMINATE(server_socket);
+    int cleanup_status = QUIXC_SOCKET_TERMINATE(server_socket);
 
-    return (cleanup_status == SERVER_OK) ? EXIT_SUCCESS : EXIT_FAILURE;
+    return (cleanup_status == QuixC_SUCC_OK) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 // *************************** ************************ *************************** //
