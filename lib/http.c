@@ -509,33 +509,51 @@ void http_response_send(int client_socket, HttpResponse *res) {
 
     strftime(date_buffer, sizeof(date_buffer), "%a, %d %b %Y %H:%M:%S GMT", gmt);
 
-    ssize_t default_content_type = http_header_map_contains(&(res -> header_map), "content-type");
-    
-    int header_length = snprintf(header_buffer, sizeof(header_buffer),
-        "%s %s\r\n"
-        "Server: C-Server\r\n"
-        "Date: %s\r\n"
-        "Content-Length: %zu\r\n"
-        "Content-Type: %s\r\n"
-        "Cache-Control: no-store\r\n"
-        "\r\n",
+    // ssize_t default_content_type = http_header_map_contains(&(res -> header_map), "content-type");
+    // (default_content_type == -1) ? "text/html" : res -> header_map.headers[default_content_type].value -> chars
+
+    int offset = 0;
+
+    // start line
+
+    offset += snprintf(header_buffer + offset, sizeof(header_buffer) - offset,
+        "%s %s\r\n",
         protocol_to_string(res -> proto),
-        status_code_to_string(res -> status),
-        date_buffer,
-        res -> body -> length, // replace
-        (default_content_type == -1) ? "text/html" : res -> header_map.headers[default_content_type].value -> chars
+        status_code_to_string(res -> status)
     );
 
-    // add if check
+    // server-defined headers
 
-    (void) send(client_socket, header_buffer, header_length, 0);
+    offset += snprintf(header_buffer + offset, sizeof(header_buffer) - offset,
+        "Server: QuixC\r\n"
+        "Date: %s\r\n"
+        "Content-Length: %zu\r\n",
+        date_buffer,
+        res -> body ? res -> body -> length : 0
+    );
 
-    printf("%s\n", res -> body -> chars);
+    // dynamically add user-defined headers
+
+    for(size_t i = 0; i < res -> header_map.count; ++i) {
+        offset += snprintf(header_buffer + offset, sizeof(header_buffer) - offset,
+            "%s: %s\r\n",
+            res -> header_map.headers[i].key -> chars,
+            res -> header_map.headers[i].value -> chars
+        );
+    }
+
+    // end headers
+
+    offset += snprintf(header_buffer + offset, sizeof(header_buffer) - offset, "\r\n");
+
+    if(res -> body) printf("%s\n", res -> body -> chars);
+
+    (void) send(client_socket, header_buffer, offset, 0);
 
     (void) send(client_socket, res -> body -> chars, res -> body -> length, 0);
 }
 
-HttpResponse *http_response_create(int client_socket) {
+HttpResponse *http_response_create() {
     HttpResponse *res = (HttpResponse *) malloc(sizeof(HttpResponse));
 
     if(!res) {
@@ -565,6 +583,8 @@ void http_response_destroy(HttpResponse *res) {
 
     m_string_destroy(res -> body);
 }
+
+
 
 int http_server_run(HTTP_SERVER *app) {
 
@@ -596,12 +616,14 @@ int http_server_run(HTTP_SERVER *app) {
         // do some bounds checking e.g. realloc if needed
 
         HttpRequest *req = http_request_create(request_buffer);
-        HttpResponse *res = http_response_create(client_socket);
+        HttpResponse *res = http_response_create();
 
         const Route *route = http_request_router(app -> routes, req);
 
         if(!route) {
             // route to ERROR RESPONSE
+            // ERROR_404();
+            // ADD CLEANUP
             continue;
         }
 
