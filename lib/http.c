@@ -300,13 +300,39 @@ ssize_t http_header_map_contains(HttpHeaderMap *map, const char *header) {
     return -1;
 }
 
+bool http_header_init(HttpHeaderMap *map) {
+    map -> capacity = 16;
+    map -> count = 0;
+    map -> headers = (HttpHeader *) malloc(map -> capacity * sizeof(HttpHeader));
+
+        if(!(map -> headers)) {
+         // ERROR
+        fprintf(stderr, "HttpHeader Alloc Error!\n");
+        return false;
+    }
+    return true;
+}
+
+bool http_header_add(HttpHeaderMap *map, const char *key, const char *value) {
+    if((map -> count) + 1 >= map -> capacity) {
+        size_t x2_capacity = (map -> capacity) * 2;
+        map -> headers = realloc(map -> headers, sizeof(HttpHeader) * x2_capacity);
+        if(!(map -> headers)) {
+            fprintf(stderr, "HEADER REALLOC FAIL!\n");
+            return false;
+        }
+        map -> capacity = x2_capacity;
+    }
+    map -> headers[map -> count].key = m_string_from_cstr(key);
+    map -> headers[map -> count].value = m_string_from_cstr(value);
+    map -> count++;
+    return true;
+}
+
 // HTTP REQUEST MUST TAKE OWNERSHIP FOR ALL HEAP-ALLOCATED MEMBERS/SUB-MEMBERS
 HttpRequest *http_request_create(mString *req_buffer) {
     HttpRequest *req = (HttpRequest *) malloc(sizeof(HttpRequest));
 
-    req -> header_map.capacity = 16;
-    req -> header_map.count = 0;
-    req -> header_map.headers = (HttpHeader *) malloc(req -> header_map.capacity * sizeof(HttpHeader));
     req -> route = NULL;
     req -> body = NULL;
 
@@ -316,12 +342,7 @@ HttpRequest *http_request_create(mString *req_buffer) {
         return NULL;
     }
 
-    if(!(req -> header_map.headers)) {
-         // ERROR
-        fprintf(stderr, "HttpHeader Alloc Error!\n");
-        free(req);
-        return NULL;
-    }
+    if(!(http_header_init(&(req -> header_map)))) { free(req); return NULL; }
 
     printf("Request Length: %zu\n", req_buffer -> length);
 
@@ -364,22 +385,11 @@ HttpRequest *http_request_create(mString *req_buffer) {
             m_string_trim_leading_whitespace(key);
             m_string_trim_leading_whitespace(value);
 
-            if((req -> header_map.count) + 1 >= req -> header_map.capacity) {
-                size_t x2_capacity = (req -> header_map.capacity) * 2;
-                req -> header_map.headers = realloc(req -> header_map.headers, sizeof(HttpHeader) * x2_capacity);
-                if(!(req -> header_map.headers)) {
-                    fprintf(stderr, "HEADER REALLOC FAIL!\n");
-                    arraylist_destroy(header_line);
-                    return NULL;
-                }
-                req -> header_map.capacity = x2_capacity;
+            if(!(http_header_add(&(req -> header_map), key -> chars, value -> chars))) {
+                arraylist_destroy(header_line);
+                return NULL;
             }
-
-            req -> header_map.headers[req -> header_map.count].key = m_string_dup(key);
-            req -> header_map.headers[req -> header_map.count].value = m_string_dup(value);
-            req -> header_map.count++;
-
-            printf("%s: %s\n", key -> chars, value -> chars);
+            // printf("%s: %s\n", key -> chars, value -> chars);
         }
         arraylist_destroy(header_line);
     }
@@ -406,6 +416,20 @@ HttpRequest *http_request_create(mString *req_buffer) {
     return req;
 }
 
+void http_header_map_cleanup(HttpHeaderMap *map) {
+
+    if(!map) {
+        fprintf(stderr, "NULL POINTER!\n");
+        return;
+    }
+
+    for(size_t i = 0; i < map -> count; ++i) {
+        m_string_destroy(map -> headers[i].key);
+        m_string_destroy(map -> headers[i].value);
+    }
+    free(map -> headers);
+}
+
 void http_request_destroy(HttpRequest *req) {
     if(!req) {
         // problem
@@ -415,12 +439,7 @@ void http_request_destroy(HttpRequest *req) {
 
     m_string_destroy(req -> route);
 
-    for(size_t i = 0; i < req -> header_map.count; ++i) {
-        m_string_destroy(req -> header_map.headers[i].key);
-        m_string_destroy(req -> header_map.headers[i].value);
-    }
-
-    free(req -> header_map.headers);
+    http_header_map_cleanup(&(req -> header_map));
     
     if(req -> body) {
         m_string_destroy(req -> body);
@@ -478,6 +497,8 @@ void http_response_send(int client_socket, HttpResponse *res) {
 
     strftime(date_buffer, sizeof(date_buffer), "%a, %d %b %Y %H:%M:%S GMT", gmt);
 
+    ssize_t default_content_type = http_header_map_contains(&(res -> header_map), "content-type");
+    
     int header_length = snprintf(header_buffer, sizeof(header_buffer),
         "%s %s\r\n"
         "Server: C-Server\r\n"
@@ -490,7 +511,7 @@ void http_response_send(int client_socket, HttpResponse *res) {
         status_code_to_string(res -> status),
         date_buffer,
         res -> body -> length, // replace
-        "text/html" // make dynamic
+        (default_content_type == -1) ? "text/html" : res -> header_map.headers[default_content_type].value -> chars
     );
 
     // add if check
@@ -505,7 +526,15 @@ void http_response_send(int client_socket, HttpResponse *res) {
 HttpResponse *http_response_create(int client_socket) {
     HttpResponse *res = (HttpResponse *) malloc(sizeof(HttpResponse));
 
-    // res -> sent = false;
+    if(!res) {
+        fprintf(stderr, "HTTP RES ALLOC FAIL!\n");
+        return NULL;
+    }
+
+    if(!(http_header_init(&(res -> header_map)))) {
+        free(res);
+        return NULL;
+    }
 
     return res;
 }
@@ -515,6 +544,9 @@ void http_response_destroy(HttpResponse *res) {
         fprintf(stderr, "NULL POINTER!\n");
         return;
     }
+
+    http_header_map_cleanup(&(res -> header_map));
+
     m_string_destroy(res -> body);
 }
 

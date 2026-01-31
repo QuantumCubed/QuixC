@@ -75,8 +75,8 @@ typedef struct HttpRequest {
 } HttpRequest;
 
 typedef struct HttpResponse {
-    HttpStatusCode status;
     HttpProtocol proto;
+    HttpStatusCode status;
     HttpHeaderMap header_map;
     mString *body;
 } HttpResponse;
@@ -99,5 +99,6 @@ void http_server_destroy(HTTP_SERVER *app);
 int http_server_run(HTTP_SERVER *app);
 void register_route(HTTP_SERVER *app, HttpMethod method, const char *route_str, void (*callback)(HttpRequest *req, HttpResponse *res)); // void *callback(HttpRequest req)
 void http_response_build(HttpResponse *res, char *body, HttpStatusCode status);
+bool http_header_add(HttpHeaderMap *map, const char *key, const char *value);
 
 #endif
