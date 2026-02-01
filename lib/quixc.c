@@ -236,7 +236,7 @@ QuixC_Request *quixc_request_create(mString *req_buffer) {
         return NULL;
     }
 
-    printf("Method: %s\nQuixC_Route: %s\nProtocol: %s\n\n", (M_STRING_ARR_GET(sl_tok_subtokens, 0)) -> chars, (M_STRING_ARR_GET(sl_tok_subtokens, 1)) -> chars, (M_STRING_ARR_GET(sl_tok_subtokens, 2)) -> chars);
+    printf("Method: %s\nRoute: %s\nProtocol: %s\n\n", (M_STRING_ARR_GET(sl_tok_subtokens, 0)) -> chars, (M_STRING_ARR_GET(sl_tok_subtokens, 1)) -> chars, (M_STRING_ARR_GET(sl_tok_subtokens, 2)) -> chars);
     
     req -> method = quixc_method_parse((M_STRING_ARR_GET(sl_tok_subtokens, 0)) -> chars);
     req -> route = m_string_dup((M_STRING_ARR_GET(sl_tok_subtokens, 1)));
@@ -495,14 +495,24 @@ void quixc_route_register(QuixC *app, QuixC_Method method, const char *route_str
     arraylist_append(app -> routes, &route); // should be fine due to memcpy arraylist impl *I think?*
 }
 
-void quixc_directory_register(QuixC *app, const char *dir_path) {
-
+void quixc_static_serve(QuixC_Request *req, QuixC_Response *res) {
+        // REQUEST: /static/styles.css
     // "./static"
 
     char filepath[256];
 
-    snprintf(filepath, sizeof(filepath), "%s%s", dir_path, );
+    // snprintf(filepath, sizeof(filepath), "%s%s", dir_path, );
+    printf("TEST!\n");
+}
 
+void quixc_directory_register(QuixC *app, const char *dir_path) {
+    QuixC_Route route;
+
+    route.method = QuixC_HTTP_GET;
+    route.route_str = dir_path;
+    route.route_callback = quixc_static_serve;
+    
+    arraylist_append(app -> routes, &route);
 }
 
 QuixC_Route *quixc_request_router(ArrayList *app_routes, QuixC_Request *req) {
