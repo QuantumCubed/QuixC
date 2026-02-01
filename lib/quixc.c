@@ -215,15 +215,15 @@ QuixC_Request *quixc_request_create(mString *req_buffer) {
 
     if(!(quixc_header_init(&(req -> header_map)))) { free(req); return NULL; }
 
-    printf("Request Length: %zu\n", req_buffer -> length);
+    // printf("Request Length: %zu\n", req_buffer -> length);
 
     ArrayList *sections = m_string_tokenize(req_buffer, "\r\n\r\n");
 
-    printf("Number of Sections: %zu\n", sections -> size);
+    // printf("Number of Sections: %zu\n", sections -> size);
 
     ArrayList *lines = m_string_tokenize(M_STRING_ARR_GET(sections, 0), "\r\n");
 
-    printf("Number of Lines: %zu\n\n", lines -> size);
+    // printf("Number of Lines: %zu\n\n", lines -> size);
 
     // PARSE START LINE
 
@@ -452,7 +452,7 @@ void quixc_response_send(int client_socket, QuixC_Response *res) {
 
 // *************************** QUIXC INSTANCE FUNCTIONS *************************** //
 
-QuixC *quixc_create(const char *HOST_IP, const uint16_t PORT) {
+QuixC *quixc(const char *HOST_IP, const uint16_t PORT) {
 
     QuixC *app = (QuixC *) malloc(sizeof(QuixC));
 
@@ -495,11 +495,16 @@ void quixc_route_register(QuixC *app, QuixC_Method method, const char *route_str
     arraylist_append(app -> routes, &route); // should be fine due to memcpy arraylist impl *I think?*
 }
 
-void quixc_directory_register() {
-    return; // add stuff
+void quixc_directory_register(QuixC *app, const char *dir_path) {
+
+    // "./static"
+
+    char filepath[256];
+
+    snprintf(filepath, sizeof(filepath), "%s%s", dir_path, );
+
 }
 
-// REFACTOR TO QuixC ROUTER
 QuixC_Route *quixc_request_router(ArrayList *app_routes, QuixC_Request *req) {
     int route_index = -1;
 

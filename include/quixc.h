@@ -84,6 +84,7 @@ typedef struct QuixC_Response {
 typedef struct QuixC_Route {
     QuixC_Method method;
     const char *route_str;
+    // add middleware support
     void (*route_callback)(QuixC_Request *req, QuixC_Response *res);
 } QuixC_Route;
 
@@ -94,9 +95,10 @@ typedef struct QuixC {
     ArrayList *routes;
 } QuixC;
 
-QuixC *quixc_create(const char *HOST_IP, const uint16_t PORT);
+QuixC *quixc(const char *HOST_IP, const uint16_t PORT);
 void quixc_cleanup(QuixC *app);
 void quixc_route_register(QuixC *app, QuixC_Method method, const char *route_str, void (*callback)(QuixC_Request *req, QuixC_Response *res)); // void *callback(HttpRequest req)
+void quixc_directory_register(QuixC *app, const char *dir_path);
 int quixc_run(QuixC *app);
 bool quixc_header_add(QuixC_Header_Map *map, const char *key, const char *value);
 
