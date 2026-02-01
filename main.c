@@ -1,4 +1,4 @@
-#include "http.h"
+#include "quixc.h"
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,25 +17,25 @@ void do_something(QuixC_Request *req, QuixC_Response *res) {
     res -> status = 200;
 }
 
-void homepage(QuixC_Request *req, QuixC_Response *res) {
-    res -> body -> content.file.filepath = "./static/index.html";
-    res -> body -> type = BODY_TYPE_SENDFILE;
+// void homepage(QuixC_Request *req, QuixC_Response *res) {
+//     res -> body -> content.file.filepath = "./static/index.html";
+//     res -> body -> type = BODY_TYPE_SENDFILE;
 
-    struct stat st;
+//     struct stat st;
 
-    if(stat("./static/index.html", &st) == 0) {
-        res -> body -> content_length = st.st_size;
-    }
+//     if(stat("./static/index.html", &st) == 0) {
+//         res -> body -> content_length = st.st_size;
+//     }
 
-    res -> status = 200;
-}
+//     res -> status = 200;
+// }
 
 int main(void) {
     QuixC *app = quixc_create("0.0.0.0", 3000);
 
     // register routes before running app loop
 
-    quixc_route_register(app, QuixC_HTTP_GET, "/", homepage);
+    // quixc_route_register(app, QuixC_HTTP_GET, "/", homepage);
     quixc_route_register(app, QuixC_HTTP_GET, "/something", do_something);
 
     int cleanup_status = quixc_run(app);
