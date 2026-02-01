@@ -23,7 +23,7 @@ void homepage(QuixC_Request *req, QuixC_Response *res) {
 
     struct stat st;
 
-    if(stat("./static/index.html", &st) == 0) {
+    if(stat("./pages/index.html", &st) == 0) {
         res -> body -> content_length = st.st_size;
     }
 
@@ -34,7 +34,7 @@ int main(void) {
     QuixC *app = quixc("0.0.0.0", 3000);
 
     // register routes before running app loop
-    quixc_directory_register(app, "./static");
+    // quixc_directory_register(app, "./static");
     quixc_route_register(app, QuixC_HTTP_GET, "/", homepage);
     quixc_route_register(app, QuixC_HTTP_GET, "/something", do_something);
 
