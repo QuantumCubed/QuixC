@@ -34,6 +34,11 @@ typedef enum QuixC_Protocol {
     QuixC_PROTOCOL_UNKNOWN
 } QuixC_Protocol;
 
+typedef struct QuixC_MIME_Map {
+    const char *ext;
+    const char *mime_type;
+} QuixC_MIME_Map;
+
 typedef enum QuixC_Body_t {
     BODY_TYPE_STRING,
     BODY_TYPE_FILE,
@@ -48,6 +53,7 @@ typedef struct QuixC_Body {
         const char *string;
         struct {
             const char *filepath;
+            bool is_static;
         } file;
         struct {
             void *binary;
@@ -83,22 +89,28 @@ typedef struct QuixC_Response {
 
 typedef struct QuixC_Route {
     QuixC_Method method;
-    const char *route_str;
+    const char *route;
     // add middleware support
     void (*route_callback)(QuixC_Request *req, QuixC_Response *res);
 } QuixC_Route;
+
+typedef struct QuixC_Router {
+    ArrayList *routes; // type QuixC_Route
+    bool catch_all;
+} QuixC_Router;
 
 typedef struct QuixC {
     volatile sig_atomic_t SHUTDOWN_REQ;
     const char *HOST_IP;
     uint16_t PORT;
-    ArrayList *routes;
+    QuixC_Router router;
 } QuixC;
 
 QuixC *quixc(const char *HOST_IP, const uint16_t PORT);
 void quixc_cleanup(QuixC *app);
-void quixc_route_register(QuixC *app, QuixC_Method method, const char *route_str, void (*callback)(QuixC_Request *req, QuixC_Response *res)); // void *callback(HttpRequest req)
-void quixc_directory_register(QuixC *app, const char *dir_path);
+void quixc_route_register(QuixC_Router *app_router, QuixC_Method method, const char *route, void (*callback)(QuixC_Request *req, QuixC_Response *res)); // void *callback(HttpRequest req)
+// void quixc_catch_all_register(QuixC *app, const char *dir_path);
+void quixc_CA_route_register(QuixC_Router *app_router, const char *CA_route);
 int quixc_run(QuixC *app);
 bool quixc_header_add(QuixC_Header_Map *map, const char *key, const char *value);
 

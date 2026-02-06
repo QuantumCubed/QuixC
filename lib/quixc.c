@@ -25,6 +25,17 @@
 
 volatile sig_atomic_t GLOBAL_SHUTDOWN_REQ = 0;
 
+static QuixC_MIME_Map mime_map[] = {
+    {".htm", "text/html"},
+    {".html", "text/html"},
+    {".css", "text/css"},
+    {".js", "application/javascript"},
+    {".png", "image/png"},
+    {".jpg", "image/jpeg"},
+    {".gif", "image/gif"},
+    {NULL, NULL}
+};
+
 // *************************** SOCKET FUNCTIONS *************************** //
 
 static void QUIXC_SIGNAL_HANDLER(int sig) {
@@ -124,6 +135,22 @@ const char* quixc_sc_to_str(int status_code) {
         case 500: return "500 Internal Server Error";
         default: return "500 Internal Server Error";
     }
+}
+
+const char* quixc_fext_to_mime(const char *filepath) {
+
+    const char *f_ext =  strrchr(filepath, '.');
+
+    if(f_ext == NULL) {
+        return "application/octet-stream";
+    }
+
+    for(size_t i = 0; mime_map[i].ext != NULL; i++) {
+        if(strcmp(f_ext, mime_map[i].ext) == 0) {
+            return mime_map[i].mime_type;
+        }
+    }
+    return "application/octet-stream";
 }
 
 // *************************** *************** *************************** //
@@ -434,6 +461,7 @@ void quixc_response_send(int client_socket, QuixC_Response *res) {
                 sent = sendfile(client_socket, file_fd, &offset, res -> body -> content_length - offset);
                 if(sent <= 0) break;
             }
+            if(res -> body -> content.file.is_static) free((char *) (res -> body -> content.file.filepath));
             close(file_fd);
         break;
 
@@ -449,6 +477,97 @@ void quixc_response_send(int client_socket, QuixC_Response *res) {
 }
 
 // *************************** *********************** *************************** //
+
+// *************************** ROUTER FUNCTIONS *************************** //
+
+// ArrayList Route Cleanup Callback
+void quixc_route_E_cleanup(void *E) {
+	if(!E) {
+		fprintf(stderr, "NULL POINTER PASSED!\n");
+		return;
+	}
+    free(*(QuixC_Route **) E);
+}
+
+void quixc_route_register(QuixC_Router *app_router, QuixC_Method method, const char *route, void (*callback)(QuixC_Request *req, QuixC_Response *res)) { // (req, res) : const void *callback(HttpRequest req)
+    
+    QuixC_Route rte;
+
+    rte.method = method;
+    rte.route = route;
+    rte.route_callback = callback;
+    
+    arraylist_append(app_router -> routes, &rte); // should be fine due to memcpy arraylist impl *I think?*
+}
+
+void quixc_static_serve(QuixC_Request *req, QuixC_Response *res) {
+    // REQUEST: /static/styles.css
+
+    // char filepath[256];
+
+    char *filepath = (char *) malloc(256); // free after send
+
+    // ADD SECURITY STUFF HERE
+
+    const char *MIME_t = quixc_fext_to_mime(req -> route -> chars);
+
+    snprintf(filepath, 256, "./static%s", req -> route -> chars); // switch to macro later
+    
+    struct stat st;
+
+    if(stat(filepath, &st) != 0) {
+        // 404
+        return;
+    }
+
+    quixc_header_add(&(res -> header_map), "content-type", MIME_t); // make dynamic content type detection
+
+    // strcpy(res -> body -> content.file.filepath, filepath); // "./static/css/styles.css"; // malloc or something
+    res -> body -> type = BODY_TYPE_SENDFILE;
+    res -> body -> content.file.is_static = true;
+    res -> body -> content.file.filepath = filepath; // free after send
+    res -> body -> content_length = st.st_size;
+    res -> status = 200;
+}
+
+void quixc_CA_route_register(QuixC_Router *app_router, const char *CA_route) {
+    QuixC_Route route;
+
+    route.method = QuixC_HTTP_GET;
+    route.route = CA_route;
+    route.route_callback = quixc_static_serve;
+    
+    arraylist_append(app_router -> routes, &route);
+
+    app_router -> catch_all = true;
+}
+
+QuixC_Route *quixc_router_handler(QuixC_Router *app_router, QuixC_Request *req) {
+    int route_index = -1;
+
+    // 1. Find QuixC_Route ... 2. Ensure QuixC_Route Requirements Met ...
+    
+    ArrayList *app_routes = app_router -> routes;
+
+    for(size_t i = 0; i <  app_routes -> size; ++i) {
+        const char *route_str = ((QuixC_Route *) arraylist_get(app_routes, i)) -> route;
+        if(strcmp((req -> route) -> chars, route_str) == 0) { // strcmp returns 0 if equal for some reason -_-
+            route_index = i;
+        }
+    }
+
+    if(route_index < 0) return NULL;
+    // why does this not need to be *(QuixC_Route **) ?!?!
+    QuixC_Route *rte_ptr = (QuixC_Route *) arraylist_get(app_routes, route_index);
+
+    if(req -> method != rte_ptr -> method) return NULL; // if HTTP Method between registered & req do not match
+
+    // RETURN -1 if auth headers or other required params for request are not in request
+
+    return rte_ptr;
+}
+
+// *************************** **************** *************************** //
 
 // *************************** QUIXC INSTANCE FUNCTIONS *************************** //
 
@@ -472,7 +591,15 @@ QuixC *quixc(const char *HOST_IP, const uint16_t PORT) {
     app -> HOST_IP = HOST_IP;
     app -> PORT = PORT;
 
-    app -> routes = arraylist_create(10, sizeof(QuixC_Route), NULL); // no cleanup callbacks required (all members are stack)
+    app -> router.routes = arraylist_create(10, sizeof(QuixC_Route), quixc_route_E_cleanup);
+
+    if(!(app -> router.routes)) {
+        perror("Router Alloc Fail!");
+        free(app);
+        return NULL; // REPLACE WITH PROPER ERROR HANDLING!!!
+    }
+
+    app -> router.catch_all = false;
 
     return app;
 }
@@ -480,62 +607,9 @@ QuixC *quixc(const char *HOST_IP, const uint16_t PORT) {
 void quixc_cleanup(QuixC *app) {
     if(!app) return;
 
-    arraylist_destroy(app -> routes); // cleanup routes arraylist
+    arraylist_destroy(app -> router.routes);
+
     free(app);
-}
-
-void quixc_route_register(QuixC *app, QuixC_Method method, const char *route_str, void (*callback)(QuixC_Request *req, QuixC_Response *res)) { // (req, res) : const void *callback(HttpRequest req)
-    
-    QuixC_Route route;
-
-    route.method = method;
-    route.route_str = route_str;
-    route.route_callback = callback;
-    
-    arraylist_append(app -> routes, &route); // should be fine due to memcpy arraylist impl *I think?*
-}
-
-void quixc_static_serve(QuixC_Request *req, QuixC_Response *res) {
-        // REQUEST: /static/styles.css
-    // "./static"
-
-    char filepath[256];
-
-    // snprintf(filepath, sizeof(filepath), "%s%s", dir_path, );
-    printf("TEST!\n");
-}
-
-void quixc_directory_register(QuixC *app, const char *dir_path) {
-    QuixC_Route route;
-
-    route.method = QuixC_HTTP_GET;
-    route.route_str = dir_path;
-    route.route_callback = quixc_static_serve;
-    
-    arraylist_append(app -> routes, &route);
-}
-
-QuixC_Route *quixc_request_router(ArrayList *app_routes, QuixC_Request *req) {
-    int route_index = -1;
-
-    // 1. Find QuixC_Route ... 2. Ensure QuixC_Route Requirements Met ...
-    
-    for(size_t i = 0; i < app_routes -> size; ++i) {
-        const char *route_str = ((QuixC_Route *) arraylist_get(app_routes, i)) -> route_str;
-        if(strcmp((req -> route) -> chars, route_str) == 0) { // strcmp returns 0 if equal for some reason -_-
-            route_index = i;
-        }
-    }
-
-    if(route_index < 0) return NULL;
-
-    QuixC_Route *rte_ptr = (QuixC_Route *) arraylist_get(app_routes, route_index);
-
-    if(req -> method != rte_ptr -> method) return NULL; // if HTTP Method between registered & req do not match
-
-    // RETURN -1 if auth headers or other required params for request are not in request
-
-    return rte_ptr;
 }
 
 int quixc_run(QuixC *app) {
@@ -570,13 +644,17 @@ int quixc_run(QuixC *app) {
         QuixC_Request *req = quixc_request_create(request_buffer);
         QuixC_Response *res = quixc_response_create();
 
-        const QuixC_Route *route = quixc_request_router(app -> routes, req);
+        QuixC_Route *route = quixc_router_handler(&(app -> router), req); // make const later
 
-        if(!route) {
-            // route to ERROR RESPONSE
-            // ERROR_404();
-            // ADD CLEANUP
-            continue;
+        // if(!route) {
+        //     // route to ERROR RESPONSE
+        //     // ERROR_404();
+        //     // ADD CLEANUP
+        //     continue;
+        // }
+
+        if(!route && app -> router.catch_all) {
+            route = (QuixC_Route *) arraylist_get(app -> router.routes, (app -> router.routes -> size) - 1);
         }
         
         quixc_request_execute(route, req, res);
