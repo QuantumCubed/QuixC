@@ -18,12 +18,13 @@ void do_something(QuixC_Request *req, QuixC_Response *res) {
 }
 
 void homepage(QuixC_Request *req, QuixC_Response *res) {
-    res -> body -> content.file.filepath = "./pages/index.html";
+    res -> body -> content.file.filepath = "./template/index.html";
     res -> body -> type = BODY_TYPE_SENDFILE;
+    res -> body -> content.file.is_static = false;
 
     struct stat st;
 
-    if(stat("./pages/index.html", &st) == 0) {
+    if(stat("./template/index.html", &st) == 0) {
         res -> body -> content_length = st.st_size;
     }
 
@@ -34,9 +35,10 @@ int main(void) {
     QuixC *app = quixc("0.0.0.0", 3000);
 
     // register routes before running app loop
-    // quixc_directory_register(app, "./static");
-    quixc_route_register(app, QuixC_HTTP_GET, "/", homepage);
-    quixc_route_register(app, QuixC_HTTP_GET, "/something", do_something);
+    
+    quixc_route_register(&(app -> router), QuixC_HTTP_GET, "/", homepage);
+    quixc_route_register(&(app -> router), QuixC_HTTP_GET, "/something", do_something);
+    quixc_CA_route_register(&(app -> router), "/*"); // MUST BE AFTER ALL DYNAMIC ROTUES REGISTERED!!!
 
     int cleanup_status = quixc_run(app);
 
